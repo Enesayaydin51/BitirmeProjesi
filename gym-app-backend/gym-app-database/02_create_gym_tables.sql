@@ -44,9 +44,10 @@ CREATE TABLE IF NOT EXISTS workout_exercises (
     id SERIAL PRIMARY KEY,
     workout_id INTEGER NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
     exercise_name VARCHAR(255) NOT NULL,
+    exercise_type VARCHAR(255), -- chest,leg,shoulder,back etc...
     sets INTEGER,
-    reps INTEGER,
-    weight DECIMAL(8,2),
+    reps VARCHAR(255),
+    --weight DECIMAL(8,2), I'm not sure if we should specify specific weights for the exercises, we can put them as notes.
     duration INTEGER, -- in seconds
     rest_time INTEGER, -- in seconds
     notes TEXT,
@@ -63,7 +64,7 @@ CREATE TABLE IF NOT EXISTS diets (
     protein_grams DECIMAL(6,2),
     carbs_grams DECIMAL(6,2),
     fats_grams DECIMAL(6,2),
-    meals JSONB, -- örnek: [{"meal": "Breakfast", "items": ["Eggs", "Oatmeal"]}, ...]
+    meals JSONB, -- Ex: [{"meal": "Breakfast", "items": ["Eggs", "Oatmeal"]}, etc...]
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

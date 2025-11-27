@@ -204,82 +204,58 @@ Projede beslenme önerileri ve soru-cevap için Google Gemini API entegrasyonu b
    - Ücretsiz kullanım için herhangi bir kredi kartı eklemenize gerek yok
    - Daha fazla kullanım için Google Cloud Console'dan billing ayarlayabilirsiniz
 
-### 2. Backend'de .env Dosyası Oluşturma
+### 2. Proje Kök Dizinde .env Dosyası Oluşturma
 
-Backend klasöründe (`gym-app-backend/`) `.env` adında bir dosya oluşturun:
+**⚠️ ÖNEMLİ:** API key'ler artık kod dosyalarında hardcoded değil, güvenlik için `.env` dosyasında saklanıyor.
+
+Proje kök dizininde (`BitirmeProjesiG-ncel/`) `.env` adında bir dosya oluşturun:
 
 ```env
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=gym_app_db
-DB_USER=postgres
-DB_PASSWORD=postgres
-
-# JWT Configuration
-JWT_SECRET=gym_app_jwt_secret_key_2024_very_secure
-JWT_EXPIRES_IN=24h
-
-# Server Configuration
-PORT=3000
-
-# Google Gemini API Configuration
+# Google Gemini API Key
 GEMINI_API_KEY=your-gemini-api-key-here
 ```
 
-**Önemli:** `GEMINI_API_KEY` değerini kendi API key'inizle değiştirin.
+**Adımlar:**
 
-### 3. API Key'i Test Etme (Önerilen)
+1. **Proje kök dizininde `.env` dosyası oluşturun:**
+   ```bash
+   cd BitirmeProjesiG-ncel
+   # Windows PowerShell'de:
+   New-Item -Path ".env" -ItemType File
+   ```
 
-Docker ile uğraşmadan önce, API key'inizin çalışıp çalışmadığını test edin:
+2. **Dosyayı açın ve API key'inizi ekleyin:**
+   ```
+   GEMINI_API_KEY=AIzaSy... (kendi key'inizi buraya yapıştırın)
+   ```
 
-```bash
-cd gym-app-backend
-node test-ai.js
-```
+3. **Dosyayı UTF-8 encoding ile kaydedin (BOM olmadan):**
+   - VS Code/Cursor'da: Sağ alttaki encoding'i tıklayın → "Save with Encoding" → **"UTF-8"** seçin
+   - Notepad'te: "Farklı Kaydet" → Encoding: **"UTF-8"** seçin
 
-Bu test dosyası:
-- API key'inizi kontrol eder
-- Mevcut modelleri listeler
-- Çalışan bir model ile test isteği gönderir
+**⚠️ ÖNEMLİ GÜVENLİK NOTLARI:**
+- `.env` dosyası `.gitignore`'da olduğu için Git'e commit edilmeyecek (güvenli)
+- **ASLA** API key'leri kod dosyalarına hardcoded olarak yazmayın
+- API key'inizi başkalarıyla paylaşmayın
+- Eğer API key'iniz GitHub'a açığa çıkarsa, hemen Google AI Studio'dan revoke edin ve yeni bir key oluşturun
 
-**Başarılı çıktı örneği:**
-```
-✅ BAŞARILI! Model: gemini-2.5-flash
-   Cevap: Merhaba! Ben iyiyim, teşekkür ederim...
-```
+### 3. Docker Container'ları Başlatma
 
-**Eğer 404 hatası alırsanız:**
-- API key'inizi kontrol edin
-- Yeni bir API key oluşturmayı deneyin
-- Google AI Studio'da API key'inizin aktif olduğundan emin olun
-
-### 4. Docker Container'ı Yeniden Build Etme
-
-Gemini paketi eklendiği için container'ı yeniden build etmeniz gerekir:
+`.env` dosyasını oluşturduktan sonra Docker container'larını başlatın:
 
 ```bash
 cd BitirmeProjesiG-ncel
 
-# Container'ları durdurun
-docker-compose down
+# Container'ları başlatın (ilk kez build için)
+docker compose up -d --build
 
-# Container'ı yeniden build edin (cache olmadan)
-docker-compose build --no-cache backend
-
-# Container'ları başlatın
-docker-compose up -d
+# Veya sadece başlatmak için
+docker compose up -d
 ```
 
-**Veya manuel kurulum için:**
-```bash
-cd gym-app-backend
-npm install
-```
+**Not:** `docker-compose.yml` dosyası otomatik olarak `.env` dosyasını okur ve `GEMINI_API_KEY` değişkenini container'a aktarır.
 
-**Not:** `docker-compose.yml` dosyasında `GEMINI_API_KEY` değerini güncellemeyi unutmayın!
-
-### 5. Kullanılan Modeller
+### 4. Kullanılan Modeller
 
 Proje, Google Gemini API'nin v1 endpoint'ini kullanır ve şu modelleri sırayla dener:
 
@@ -292,7 +268,7 @@ Sistem otomatik olarak çalışan ilk modeli kullanır. Eğer bir model başarı
 
 **Önemli:** SDK otomatik olarak v1 API endpoint'ini kullanır. Eski v1beta API kullanılmaz.
 
-### 6. AI Özelliklerini Kullanma
+### 5. AI Özelliklerini Kullanma
 
 1. **Frontend'de Beslenme sayfasına gidin**
 2. **"🤖 AI Asistan" sekmesine tıklayın**
@@ -300,26 +276,40 @@ Sistem otomatik olarak çalışan ilk modeli kullanır. Eğer bir model başarı
    - **💬 Soru Sor:** Beslenme ile ilgili sorular sorabilirsiniz
    - **📋 Kişiselleştirilmiş Plan:** AI tarafından oluşturulan beslenme planı
 
-### 7. Sorun Giderme
+### 6. Sorun Giderme
 
-#### "404 Not Found - models/... is not found for API version v1beta" Hatası
+#### "Gemini API key yapılandırılmamış" Hatası
 
-Bu hata, SDK'nın yanlış API versiyonunu kullandığını gösterir. Çözüm:
+Bu hata, `.env` dosyasında `GEMINI_API_KEY` değerinin bulunamadığını gösterir. Çözüm:
 
-1. **API Key'i test edin:**
+1. **`.env` dosyasının varlığını kontrol edin:**
    ```bash
-   cd gym-app-backend
-   node test-ai.js
+   cd BitirmeProjesiG-ncel
+   # .env dosyasının var olduğundan emin olun
    ```
 
-2. **Eğer test başarısız olursa:**
-   - Yeni bir API key oluşturun (Google AI Studio'dan)
-   - `docker-compose.yml` dosyasındaki `GEMINI_API_KEY` değerini güncelleyin
-   - Container'ı yeniden başlatın: `docker-compose restart backend`
+2. **`.env` dosyasının içeriğini kontrol edin:**
+   - Dosyada `GEMINI_API_KEY=your-key-here` satırı olmalı
+   - Key değeri boş olmamalı
 
-3. **Model listesini kontrol edin:**
-   - Test dosyası otomatik olarak mevcut modelleri listeler
-   - Çalışan modelleri gösterir
+3. **Dosya encoding'ini kontrol edin:**
+   - `.env` dosyası UTF-8 (BOM olmadan) olmalı
+   - Windows'ta Notepad ile kaydederseniz UTF-16 olabilir, bu hataya neden olur
+   - VS Code/Cursor ile UTF-8 olarak kaydedin
+
+4. **Container'ı yeniden başlatın:**
+   ```bash
+   docker compose restart backend
+   ```
+
+#### "404 Not Found - models/... is not found" Hatası
+
+Bu hata, API key'in geçersiz olduğunu veya model adının yanlış olduğunu gösterir. Çözüm:
+
+1. **API key'inizi kontrol edin:**
+   - Google AI Studio'dan yeni bir API key oluşturun
+   - `.env` dosyasındaki `GEMINI_API_KEY` değerini güncelleyin
+   - Container'ı yeniden başlatın: `docker compose restart backend`
 
 #### "Gemini API kotası aşıldı" Hatası
 - Google AI Studio hesabınızda günlük limitinizi kontrol edin
@@ -328,26 +318,44 @@ Bu hata, SDK'nın yanlış API versiyonunu kullandığını gösterir. Çözüm:
 
 #### "Gemini API anahtarı geçersiz" Hatası
 - `.env` dosyasındaki `GEMINI_API_KEY` değerini kontrol edin
-- `docker-compose.yml` dosyasındaki `GEMINI_API_KEY` değerini kontrol edin
-- API key'in doğru kopyalandığından emin olun
+- API key'in doğru kopyalandığından emin olun (başında/sonunda boşluk olmamalı)
 - API key'in Google AI Studio'dan oluşturulduğundan emin olun
-- Container'ı yeniden başlatın: `docker-compose restart backend`
+- Eğer key revoke edildiyse, yeni bir key oluşturun
+- Container'ı yeniden başlatın: `docker compose restart backend`
 
 #### "Cannot find module '@google/generative-ai'" Hatası
 - Container'ı yeniden build edin (yukarıdaki adım 4'e bakın)
 - `npm install` komutunu backend klasöründe çalıştırın
 
 #### "Tüm modeller başarısız" Hatası
-- API key'inizi test edin: `node test-ai.js`
+- `.env` dosyasındaki `GEMINI_API_KEY` değerini kontrol edin
 - Yeni bir API key oluşturmayı deneyin
 - Google AI Studio'da API key'inizin aktif olduğundan emin olun
-- Container loglarını kontrol edin: `docker-compose logs -f backend`
+- Container loglarını kontrol edin: `docker compose logs -f backend`
 
-### 8. AI Özelliklerini Devre Dışı Bırakma
+### 7. AI Özelliklerini Devre Dışı Bırakma
 
 Eğer Gemini API kullanmak istemiyorsanız:
 - `.env` dosyasından `GEMINI_API_KEY` satırını kaldırın veya boş bırakın
 - Uygulama çalışmaya devam eder, sadece AI özellikleri çalışmaz
+- Backend loglarında "⚠️ GEMINI_API_KEY bulunamadı" uyarısı görünecektir
+
+### 8. Firebase API Key (Opsiyonel - Frontend için)
+
+Eğer Firebase kullanıyorsanız, frontend için de environment variable ekleyebilirsiniz:
+
+**Frontend `.env` dosyası oluşturun** (`gym-app-frontend/.env`):
+```env
+EXPO_PUBLIC_FIREBASE_API_KEY=your-firebase-api-key-here
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.firebasestorage.app
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+EXPO_PUBLIC_FIREBASE_APP_ID=your-app-id
+EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+```
+
+**Not:** Firebase API key'leri client-side'da kullanıldığı için public olabilir, ancak yine de environment variable kullanmak best practice'dir.
 
 ## 🗃️ Veritabanı Migration ve Tablo Oluşturma
 
@@ -566,11 +574,11 @@ Bu proje MIT lisansı altında lisanslanmıştır.
 
 #### ✨ Yeni Özellikler
 
-1. **🧪 API Key Test Sistemi**
-   - `test-ai.js` test dosyası eklendi
-   - API key'inizi Docker olmadan test edebilirsiniz
-   - Mevcut modelleri otomatik listeler
-   - Çalışan modelleri otomatik tespit eder
+1. **🔒 Güvenlik İyileştirmeleri**
+   - API key'ler artık kod dosyalarında hardcoded değil
+   - Tüm API key'ler `.env` dosyasına taşındı
+   - `.env` dosyası `.gitignore`'da (Git'e commit edilmiyor)
+   - GitHub secret scanning uyarıları önlendi
 
 2. **🔄 Model Fallback Mekanizması**
    - Birden fazla model sırayla denenir

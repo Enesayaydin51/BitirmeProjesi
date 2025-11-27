@@ -1,16 +1,5 @@
 -- Initialize gym app database
--- This script creates the database and runs all migrations
-
--- Create database if it doesn't exist
--- Note: This needs to be run as a superuser or database owner
--- CREATE DATABASE gym_app;
-
--- Connect to the gym_app database
--- \c gym_app;
-
--- Run all migration files
-\i 01_create_users_table.sql
-\i 02_create_gym_tables.sql
+-- This script runs after all tables are created by Docker
 
 -- Insert sample data
 INSERT INTO gyms (name, address, phone_number, email, description, opening_hours, facilities) VALUES
@@ -35,7 +24,3 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECU
 CREATE TRIGGER update_gyms_updated_at BEFORE UPDATE ON gyms FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_memberships_updated_at BEFORE UPDATE ON memberships FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_workouts_updated_at BEFORE UPDATE ON workouts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Grant permissions (adjust as needed for your setup)
--- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO gym_app_user;
--- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO gym_app_user;

@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const path = require('path');
 require('dotenv').config();
 
 // Set default environment variables if not provided
@@ -20,7 +21,7 @@ const authRoutes = require('./presentation/routes/authRoutes');
 const { errorHandler } = require('./presentation/middleware/errorHandler');
 const dbConnection = require('./infrastructure/database/connection');
 
-// Swagger configuration
+// Swagger configuration (FIXED)
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -30,36 +31,26 @@ const swaggerOptions = {
       description: 'Gym App Backend API Documentation',
     },
     servers: [
-      {
-        url: 'http://localhost:3000',
-        description: 'Development server',
-      },
-      {
-        url: 'http://10.152.173.189:3000',
-        description: 'Production server',
-      },
+      { url: 'http://localhost:3000', description: 'Development server' },
+      { url: 'http://10.152.173.189:3000', description: 'Production server' },
     ],
   },
-  apis: ['./src/presentation/routes/*.js', './src/presentation/controllers/*.js'], // Path to the API files
+  // 🔧 Path fix — uses __dirname to always find correct route files
+  apis: [
+    path.join(__dirname, './presentation/routes/*.js'),
+    path.join(__dirname, './presentation/controllers/*.js'),
+  ],
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-// app.use(helmet()); // Geçici olarak devre dışı
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8081',  // Metro bundler debug
-    'http://10.0.2.2:8081',   // Android emulator
-    'http://10.0.2.2:3000',   // Android emulator API access
-    'http://192.168.134.230:3000', // Gerçek cihaz test IP
-    'http://192.168.134.230:8081'  // Gerçek cihaz Metro bundler
-  ],
-  credentials: true
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(morgan('combined'));
@@ -74,8 +65,8 @@ app.use('/api/auth', authRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
+  res.status(200).json({
+    status: 'OK',
     message: 'Gym App Backend is running',
     timestamp: new Date().toISOString()
   });
@@ -106,7 +97,7 @@ app.use(errorHandler);
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ 
+  res.status(404).json({
     error: 'Route not found',
     message: `Cannot ${req.method} ${req.originalUrl}`
   });
@@ -115,12 +106,10 @@ app.use((req, res) => {
 // Start server
 const startServer = async () => {
   try {
-    // Initialize database connection
     console.log('🔌 Connecting to database...');
     await dbConnection.connect();
     console.log('✅ Database connected successfully');
-    
-    // Start server
+
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📱 Health check: http://localhost:${PORT}/health`);

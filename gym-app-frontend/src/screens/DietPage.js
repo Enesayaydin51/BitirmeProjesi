@@ -11,6 +11,9 @@ import {
 } from "react-native";
 import Layout from "../components/Layout";
 
+// UI’da kullanacağımız GOLD
+const GOLD = "#D6B982";
+
 const foodDatabase = [
   { name: "Tavuk Göğsü (100g)", calories: 165, protein: 31, carb: 0, fat: 3.6 },
   { name: "Yulaf (100g)", calories: 389, protein: 17, carb: 66, fat: 7 },
@@ -27,7 +30,6 @@ const foodDatabase = [
 const DietPage = () => {
   const [activeTab, setActiveTab] = useState("Önerilen");
   const [goal, setGoal] = useState("Kilo Verme");
-
   const [customFoods, setCustomFoods] = useState([]);
   const [foodName, setFoodName] = useState("");
   const [calories, setCalories] = useState("");
@@ -113,49 +115,37 @@ const DietPage = () => {
   return (
     <Layout>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.headerSpace} />
-
         <Text style={styles.mainTitle}>Beslenme Planı</Text>
 
-        {/* Sekmeler */}
+        {/* Tabs */}
         <View style={styles.tabContainer}>
-          <Pressable
-            style={[styles.tab, activeTab === "Önerilen" && styles.activeTab]}
-            onPress={() => setActiveTab("Önerilen")}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "Önerilen" && styles.activeTabText,
-              ]}
+          {["Önerilen", "Kendi"].map((tab) => (
+            <Pressable
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.activeTab]}
+              onPress={() => setActiveTab(tab)}
             >
-              Önerilen Programlar
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.tab, activeTab === "Kendi" && styles.activeTab]}
-            onPress={() => setActiveTab("Kendi")}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === "Kendi" && styles.activeTabText,
-              ]}
-            >
-              Kendi Programım
-            </Text>
-          </Pressable>
+              <Text
+                style={[
+                  styles.tabText,
+                  activeTab === tab && styles.activeTabText,
+                ]}
+              >
+                {tab === "Önerilen" ? "Önerilen Planlar" : "Kendi Programım"}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
-        {/* Önerilen Planlar */}
+        {/* Recommended Plan */}
         {activeTab === "Önerilen" && (
           <>
-            <Text style={styles.sectionTitle}>{goal} Planı</Text>
+            <Text style={styles.sectionTitle}>{goal} için önerilen plan</Text>
             <View style={styles.summaryCard}>
               <Text style={styles.cardTitle}>Günlük Makrolar</Text>
               <Text style={styles.macroText}>Kalori: {plan.calories} kcal</Text>
               <Text style={styles.macroText}>Protein: {plan.protein}</Text>
-              <Text style={styles.macroText}>Karb: {plan.carb}</Text>
+              <Text style={styles.macroText}>Karbonhidrat: {plan.carb}</Text>
               <Text style={styles.macroText}>Yağ: {plan.fat}</Text>
             </View>
 
@@ -172,7 +162,7 @@ const DietPage = () => {
           </>
         )}
 
-        {/* Kendi Programım */}
+        {/* Custom Plan */}
         {activeTab === "Kendi" && (
           <>
             <Text style={styles.sectionTitle}>Kendi Beslenme Programım</Text>
@@ -186,49 +176,41 @@ const DietPage = () => {
               </Pressable>
 
               <TextInput
-                placeholder="Besin adı"
-                placeholderTextColor="#aaa"
                 value={foodName}
                 onChangeText={setFoodName}
+                placeholder="Besin adı"
+                placeholderTextColor="#aaa"
                 style={styles.input}
               />
               <TextInput
-                placeholder="Kalori (kcal)"
-                placeholderTextColor="#aaa"
                 value={calories}
                 onChangeText={setCalories}
+                placeholder="Kalori"
+                placeholderTextColor="#aaa"
                 keyboardType="numeric"
                 style={styles.input}
               />
+
               <View style={styles.macroInputs}>
-                <TextInput
-                  placeholder="Protein (g)"
-                  placeholderTextColor="#aaa"
-                  value={protein}
-                  onChangeText={setProtein}
-                  keyboardType="numeric"
-                  style={[styles.input, { flex: 1, marginRight: 5 }]}
-                />
-                <TextInput
-                  placeholder="Karb (g)"
-                  placeholderTextColor="#aaa"
-                  value={carb}
-                  onChangeText={setCarb}
-                  keyboardType="numeric"
-                  style={[styles.input, { flex: 1, marginRight: 5 }]}
-                />
-                <TextInput
-                  placeholder="Yağ (g)"
-                  placeholderTextColor="#aaa"
-                  value={fat}
-                  onChangeText={setFat}
-                  keyboardType="numeric"
-                  style={[styles.input, { flex: 1 }]}
-                />
+                {[
+                  { label: "Protein", value: protein, setter: setProtein },
+                  { label: "Karb", value: carb, setter: setCarb },
+                  { label: "Yağ", value: fat, setter: setFat },
+                ].map((m, index) => (
+                  <TextInput
+                    key={index}
+                    value={m.value}
+                    onChangeText={m.setter}
+                    placeholder={`${m.label} (g)`}
+                    placeholderTextColor="#aaa"
+                    keyboardType="numeric"
+                    style={[styles.input, styles.macroInput]}
+                  />
+                ))}
               </View>
 
               <Pressable style={styles.addButton} onPress={addFood}>
-                <Text style={styles.addButtonText}>Besin Ekle</Text>
+                <Text style={styles.addButtonText}>Ekle</Text>
               </Pressable>
             </View>
 
@@ -248,8 +230,8 @@ const DietPage = () => {
                   {total.calories.toFixed(0)} kcal
                 </Text>
                 <Text style={styles.totalText}>
-                  Protein: {total.protein.toFixed(1)}g | Karb:{" "}
-                  {total.carb.toFixed(1)}g | Yağ: {total.fat.toFixed(1)}g
+                  Protein: {total.protein.toFixed(1)}g • Karb:{" "}
+                  {total.carb.toFixed(1)}g • Yağ: {total.fat.toFixed(1)}g
                 </Text>
               </View>
             )}
@@ -257,7 +239,7 @@ const DietPage = () => {
         )}
       </ScrollView>
 
-      {/* Besin Seç Modal */}
+      {/* Modal */}
       <Modal visible={foodModalVisible} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
@@ -293,129 +275,126 @@ const DietPage = () => {
 
 export default DietPage;
 
+// STYLES
 const styles = StyleSheet.create({
-  scrollContainer: {
-    alignItems: "center",
-    paddingBottom: 120,
-  },
-  headerSpace: { height: 60 },
+  scrollContainer: { alignItems: "center", paddingBottom: 120 },
   mainTitle: {
-    color: "#FFA040",
+    color: GOLD,
     fontSize: 24,
     fontWeight: "bold",
+    marginTop: 20,
     marginBottom: 15,
   },
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 10,
-    marginBottom: 15,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 12,
+    width: "90%",
+    overflow: "hidden",
   },
   tab: { flex: 1, paddingVertical: 10 },
-  tabText: { color: "#ccc", fontSize: 16, textAlign: "center" },
-  activeTab: { backgroundColor: "#FFA040", borderRadius: 10 },
+  tabText: { textAlign: "center", color: "#aaa", fontSize: 16 },
+  activeTab: { backgroundColor: GOLD },
   activeTabText: { color: "#000", fontWeight: "bold" },
+
   sectionTitle: {
-    color: "white",
+    color: "#fff",
     fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 10,
+    fontWeight: "600",
+    marginVertical: 12,
   },
   summaryCard: {
     width: "90%",
-    backgroundColor: "rgba(26,26,26,0.85)",
+    backgroundColor: "rgba(15,15,15,0.8)",
     borderRadius: 12,
     padding: 15,
     marginBottom: 15,
+    borderColor: GOLD,
     borderWidth: 1,
-    borderColor: "#FFA040",
   },
-  cardTitle: {
-    color: "#FFA040",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  macroText: { color: "#fff", marginBottom: 3 },
+  cardTitle: { color: GOLD, fontSize: 18, fontWeight: "bold" },
+  macroText: { color: "#fff", marginTop: 4 },
+
   mealCard: {
     width: "90%",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(255,255,255,0.07)",
     borderRadius: 12,
     padding: 15,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  mealTitle: { color: "#FFA040", fontSize: 18, fontWeight: "bold" },
-  mealItem: { color: "#fff", fontSize: 15 },
-  inputContainer: { width: "90%", marginBottom: 15 },
-  input: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    color: "white",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
-  },
-  macroInputs: { flexDirection: "row", justifyContent: "space-between" },
-  addButton: {
-    backgroundColor: "#FFA040",
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  addButtonText: {
-    color: "#000",
-    fontWeight: "bold",
-    textAlign: "center",
-  },
+  mealTitle: { color: GOLD, fontSize: 17, fontWeight: "600" },
+  mealItem: { color: "#fff", marginLeft: 5 },
+
+  inputContainer: { width: "90%", marginTop: 10 },
   selectButton: {
     backgroundColor: "rgba(255,255,255,0.1)",
+    borderColor: GOLD,
     borderWidth: 1,
-    borderColor: "#FFA040",
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 10,
   },
   selectButtonText: {
-    color: "#FFA040",
     textAlign: "center",
-    fontWeight: "bold",
+    color: GOLD,
+    fontWeight: "600",
   },
-  foodCard: {
-    width: "90%",
-    backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 10,
+  input: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    color: "white",
     padding: 10,
+    borderRadius: 8,
     marginBottom: 8,
   },
-  foodName: { color: "#FFA040", fontWeight: "bold", fontSize: 16 },
-  foodDetail: { color: "#fff", fontSize: 14 },
+  macroInputs: { flexDirection: "row", justifyContent: "space-between" },
+  macroInput: { flex: 1, marginHorizontal: 5 },
+  addButton: {
+    backgroundColor: GOLD,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addButtonText: { color: "#000", textAlign: "center", fontWeight: "bold" },
+
+  foodCard: {
+    width: "90%",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 6,
+  },
+  foodName: { color: GOLD, fontWeight: "bold", fontSize: 16 },
+  foodDetail: { color: "#ddd", fontSize: 14 },
+
   totalCard: {
     width: "90%",
-    backgroundColor: "rgba(26,26,26,0.85)",
+    backgroundColor: "rgba(15,15,15,0.85)",
     borderRadius: 12,
     padding: 15,
-    marginTop: 10,
-    borderColor: "#FFA040",
-    borderWidth: 1,
     alignItems: "center",
+    borderColor: GOLD,
+    borderWidth: 1,
+    marginTop: 10,
   },
-  totalTitle: { color: "#FFA040", fontSize: 18, fontWeight: "bold" },
+  totalTitle: { color: GOLD, fontSize: 18, fontWeight: "bold" },
   totalText: { color: "white", fontSize: 15 },
+
   modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 10,
   },
   modalContent: {
-    width: "95%",
+    width: "92%",
     maxHeight: "80%",
-    backgroundColor: "rgba(26,26,26,0.95)",
-    borderRadius: 12,
+    backgroundColor: "rgba(15,15,15,0.95)",
+    borderRadius: 15,
     padding: 15,
+    shadowColor: GOLD,
+    elevation: 10,
   },
   modalTitle: {
-    color: "#FFA040",
+    color: GOLD,
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 10,
@@ -431,9 +410,9 @@ const styles = StyleSheet.create({
   foodOptionSub: { color: "#aaa", fontSize: 13 },
   closeModalBtn: {
     marginTop: 10,
-    backgroundColor: "#FFA040",
+    backgroundColor: GOLD,
     borderRadius: 8,
     paddingVertical: 8,
   },
-  closeText: { color: "#000", textAlign: "center", fontWeight: "bold" },
+  closeText: { textAlign: "center", fontWeight: "bold", color: "#000" },
 });

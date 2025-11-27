@@ -1,11 +1,12 @@
+import React from "react";
 import {
   StyleSheet,
   Text,
   View,
   Image,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import React from "react";
 import {
   Loading,
   CustomTextInput,
@@ -16,65 +17,98 @@ import {
   setEmail,
   setPassword,
   setIsLoading,
-  setLogin,
+  setAuth,
+  setUser,
+  setToken,
 } from "../redux/userSlice";
 import Layout from "../components/Layout";
+import api from "../services/api";
 
 const LoginPage = ({ navigation }) => {
   const { email, password, isLoading } = useSelector((state) => state.user);
   const dispatch = useDispatch();
 
+  const handleLogin = async () => {
+    console.log("🚀 SIGN IN basıldı!");
+
+    if (!email || !password) {
+      Alert.alert("Hata", "Lütfen e-posta ve şifrenizi girin.");
+      return;
+    }
+
+    try {
+      dispatch(setIsLoading(true));
+
+      console.log("📡 Backend'e veri yollanıyor:", { email, password });
+      const result = await api.login({ email, password });
+      console.log("📥 Backend cevabı:", result);
+
+      // 🔥 Doğru: Kullanıcıyı login yap
+      dispatch(setUser(result.data.user));
+      dispatch(setToken(result.data.token));
+      dispatch(setAuth(true)); // 🔥 BURASI ÇOK ÖNEMLİ
+
+      Alert.alert("Başarılı", `Hoş geldiniz, ${result.data.user.firstName}!`);
+    } catch (error) {
+      console.error("❌ Giriş Hatası:", error);
+      Alert.alert("Hata", error?.message || "Giriş başarısız.");
+    } finally {
+      dispatch(setIsLoading(false));
+    }
+  };
+
   return (
     <Layout>
-      {/* edges=['top'] sadece üstteki çentiği korur */}
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.outerContainer}>
-          <View style={styles.loginBox}>
-            <Image
-              style={styles.logo}
-              source={require("../../assets/images/logo.png")}
-            />
+          <Image
+            style={styles.logo}
+            source={require("../../assets/images/logo.png")}
+          />
 
-            <Text style={styles.welcome}>GYM APP'E HOŞGELDİN!</Text>
+          <View style={styles.loginBox}>
+            <Text style={styles.welcome}>WELCOME TO GYM APP</Text>
 
             <CustomTextInput
               title="E-mail"
               isSecureText={false}
               handleonChangeText={(text) => dispatch(setEmail(text))}
               handleValue={email}
-              handlePlaceholder="E-mail adresinizi girin"
+              handlePlaceholder="Enter your e-mail"
             />
 
             <CustomTextInput
-              title="Şifre"
+              title="Password"
               isSecureText={true}
               handleonChangeText={(text) => dispatch(setPassword(text))}
               handleValue={password}
-              handlePlaceholder="Şifrenizi girin"
+              handlePlaceholder="Enter your password"
             />
 
             <View style={styles.buttonContainer}>
               <CustomButton
-                buttonText="GİRİŞ YAP"
+                buttonText="SIGN IN"
                 setWidth="100%"
-                handleOnPress={() => dispatch(setLogin())}
-                buttonColor="#FFA040"
-                pressedButtonColor="#f89028ff"
+                handleOnPress={handleLogin}
+                buttonColor="#D6B982"
+                pressedButtonColor="#C0A673"
               />
 
               <CustomButton
-                buttonText="KAYIT OL"
+                buttonText="SIGN UP"
                 setWidth="100%"
                 handleOnPress={() => navigation.navigate("Signup")}
-                buttonColor="#FFA040"
-                pressedButtonColor="#f89028ff"
+                buttonColor="transparent"
+                pressedButtonColor="rgba(214,185,130,0.2)"
+                textColor="#D6B982"
+                borderColor="#D6B982"
               />
             </View>
           </View>
 
-          {isLoading ? (
+          {isLoading && (
             <Loading changeIsLoading={() => dispatch(setIsLoading(false))} />
-          ) : null}
+          )}
         </View>
       </SafeAreaView>
     </Layout>
@@ -90,42 +124,41 @@ const styles = StyleSheet.create({
   },
   outerContainer: {
     flex: 1,
-    justifyContent: "center", // dikeyde ortalama
-    alignItems: "center", // yatayda ortalama
-    backgroundColor: "transparent",
-    paddingVertical: 20, // azıcık tampon alan (SafeArea için)
+    justifyContent: "center",
+    alignItems: "center",
   },
   logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 10,
+    width: 140,
+    height: 140,
+    marginBottom: 35,
     resizeMode: "contain",
-    backgroundColor: "transparent",
-  },
-  welcome: {
-    color: "white",
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 30,
-    marginTop: 10,
-    textAlign: "center",
   },
   loginBox: {
-    width: "80%",
-    backgroundColor: "rgba(26, 26, 26, 0.85)",
-    paddingVertical: 30, // eskisi gibi daha dikey sıkı duruş
-    paddingHorizontal: 15,
-    borderRadius: 12,
+    width: "85%",
+    backgroundColor: "rgba(15, 15, 15, 0.7)",
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    borderRadius: 20,
     alignItems: "center",
-    shadowColor: "#FF8C00",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 20,
-    elevation: 10,
+    borderWidth: 1,
+    borderColor: "rgba(214,185,130,0.15)",
+    shadowColor: "#D6B982",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  welcome: {
+    color: "#D6B982",
+    fontSize: 22,
+    fontWeight: "600",
+    marginBottom: 30,
+    letterSpacing: 1,
+    textAlign: "center",
   },
   buttonContainer: {
     width: "100%",
-    marginTop: 20,
-    alignItems: "center",
+    marginTop: 25,
+    gap: 12,
   },
 });

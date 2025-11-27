@@ -4,13 +4,14 @@ import ProfilePage from "./ProfilePage";
 import HomePage from "./HomePage";
 import DietPage from "./DietPage";
 import ExercisesPage from "./ExercisesPage";    
+import StepPage from "./Steppage";
 export {
     LoginPage,      
     SignupPage,
     ProfilePage,
     HomePage,
     DietPage,
-    ExercisesPage
-
+    ExercisesPage,
+    StepPage
     
 }

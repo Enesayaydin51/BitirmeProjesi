@@ -181,7 +181,7 @@ class UserRepository extends IUserRepository {
 
   async getUserDetails(userId) {
     const query = `
-      SELECT height, weight, injuries, created_at, updated_at
+      SELECT height, weight, injuries, goal, created_at, updated_at
       FROM user_details
       WHERE user_id = $1
     `;
@@ -197,15 +197,16 @@ class UserRepository extends IUserRepository {
 
   async updateUserDetails(userId, details) {
     const query = `
-      INSERT INTO user_details (user_id, height, weight, injuries, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO user_details (user_id, height, weight, injuries, goal, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT (user_id)
       DO UPDATE SET
         height = EXCLUDED.height,
         weight = EXCLUDED.weight,
         injuries = EXCLUDED.injuries,
+        goal = EXCLUDED.goal,
         updated_at = EXCLUDED.updated_at
-      RETURNING height, weight, injuries, created_at, updated_at
+      RETURNING height, weight, injuries, goal, created_at, updated_at
     `;
     
     const values = [
@@ -213,6 +214,7 @@ class UserRepository extends IUserRepository {
       details.height,
       details.weight,
       details.injuries,
+      details.goal || null,
       new Date(),
       new Date()
     ];

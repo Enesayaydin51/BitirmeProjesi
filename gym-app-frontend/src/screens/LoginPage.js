@@ -3,9 +3,10 @@ import {
   Text,
   View,
   Image,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import React from "react";
+import React, { useState } from "react";
 import {
   Loading,
   CustomTextInput,
@@ -16,13 +17,123 @@ import {
   setEmail,
   setPassword,
   setIsLoading,
-  setLogin,
+  setAuth,
+  setUser,
 } from "../redux/userSlice";
 import Layout from "../components/Layout";
+import apiService from "../services/api";
 
 const LoginPage = ({ navigation }) => {
-  const { email, password, isLoading } = useSelector((state) => state.user);
+  const { email, password } = useSelector((state) => state.user);
   const dispatch = useDispatch();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogin = async () => {
+    // Validasyon
+    if (!email || !email.trim()) {
+      Alert.alert("Hata", "Lütfen e-mail adresinizi girin");
+      return;
+    }
+    if (!password || !password.trim()) {
+      Alert.alert("Hata", "Lütfen şifrenizi girin");
+      return;
+    }
+
+    console.log("Login başlatılıyor...");
+    console.log("Email:", email.trim().toLowerCase());
+    console.log("API Service:", apiService);
+    console.log("API Service login fonksiyonu:", typeof apiService?.login);
+    console.log("API BaseURL:", apiService?.baseURL);
+
+    if (!apiService || typeof apiService.login !== 'function') {
+      console.error("API servisi yüklenemedi!");
+      Alert.alert("Hata", "API servisi yüklenemedi. Lütfen uygulamayı yeniden başlatın.");
+      return;
+    }
+
+    console.log("Loading state ayarlanıyor...");
+    try {
+      setIsLoading(true);
+      console.log("setIsLoading(true) çağrıldı");
+    } catch (e) {
+      console.error("setIsLoading hatası:", e);
+    }
+    
+    try {
+      dispatch(setIsLoading(true));
+      console.log("dispatch(setIsLoading(true)) çağrıldı");
+    } catch (e) {
+      console.error("dispatch hatası:", e);
+    }
+    
+    console.log("Loading state ayarlandı, try bloğuna giriliyor...");
+
+    try {
+      console.log("Try bloğu başladı");
+      
+      // Health check'i atlayalım, direkt login yapalım
+      console.log("Login API çağrısı yapılıyor...");
+      const loginData = {
+        email: email.trim().toLowerCase(),
+        password: password,
+      };
+      console.log("Login data hazırlandı:", { ...loginData, password: '***' });
+      console.log("apiService.login çağrılıyor...");
+      console.log("apiService object:", apiService);
+      console.log("apiService.login type:", typeof apiService.login);
+      
+      const response = await apiService.login(loginData);
+      console.log("apiService.login çağrısı tamamlandı, yanıt alındı");
+
+      console.log("API yanıtı alındı:", response);
+
+      if (response.success && response.data) {
+        // Redux state'ini güncelle
+        dispatch(setAuth(true));
+        dispatch(setEmail(email.trim().toLowerCase()));
+        dispatch(setUser(response.data.user)); // Kullanıcı bilgilerini Redux'a kaydet
+        
+        console.log("Login başarılı, token kaydedildi");
+        
+        Alert.alert("Başarılı", "Giriş yapıldı!", [
+          {
+            text: "Tamam",
+            onPress: () => {
+              // Navigation otomatik olarak rootNavigation'dan isAuth state'ine göre yapılacak
+            },
+          },
+        ]);
+      } else {
+        console.log("Login başarısız:", response);
+        Alert.alert("Hata", response.message || "Giriş başarısız oldu");
+      }
+    } catch (error) {
+      console.error("Login error detayları:", {
+        message: error.message,
+        stack: error.stack,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      
+      let errorMessage = "Giriş işlemi sırasında bir hata oluştu";
+      
+      if (error.message?.includes("Network Error") || error.message?.includes("Cannot connect")) {
+        errorMessage = "Backend'e bağlanılamıyor. Backend'in çalıştığından emin olun.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "E-mail veya şifre hatalı";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Hata", errorMessage);
+    } finally {
+      console.log("Login işlemi tamamlandı");
+      setIsLoading(false);
+      dispatch(setIsLoading(false));
+    }
+  };
 
   return (
     <Layout>
@@ -41,15 +152,17 @@ const LoginPage = ({ navigation }) => {
               title="E-mail"
               isSecureText={false}
               handleonChangeText={(text) => dispatch(setEmail(text))}
-              handleValue={email}
+              handleValue={email || ""}
               handlePlaceholder="E-mail adresinizi girin"
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
 
             <CustomTextInput
               title="Şifre"
               isSecureText={true}
               handleonChangeText={(text) => dispatch(setPassword(text))}
-              handleValue={password}
+              handleValue={password || ""}
               handlePlaceholder="Şifrenizi girin"
             />
 
@@ -57,9 +170,10 @@ const LoginPage = ({ navigation }) => {
               <CustomButton
                 buttonText="GİRİŞ YAP"
                 setWidth="100%"
-                handleOnPress={() => dispatch(setLogin())}
+                handleOnPress={handleLogin}
                 buttonColor="#FFA040"
                 pressedButtonColor="#f89028ff"
+                disabled={isLoading}
               />
 
               <CustomButton
@@ -68,13 +182,14 @@ const LoginPage = ({ navigation }) => {
                 handleOnPress={() => navigation.navigate("Signup")}
                 buttonColor="#FFA040"
                 pressedButtonColor="#f89028ff"
+                disabled={isLoading}
               />
             </View>
           </View>
 
-          {isLoading ? (
-            <Loading changeIsLoading={() => dispatch(setIsLoading(false))} />
-          ) : null}
+          {isLoading && (
+            <Loading changeIsLoading={() => setIsLoading(false)} />
+          )}
         </View>
       </SafeAreaView>
     </Layout>

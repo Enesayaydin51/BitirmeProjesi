@@ -40,6 +40,7 @@ services:
       DB_PASSWORD: postgres
       JWT_SECRET: gym_app_jwt_secret_key_2024_very_secure
       JWT_EXPIRES_IN: 24h
+      GEMINI_API_KEY: "AIzaSyA_KHiIHkELMEMSEViD4f5uIoRSGyE5MeI" 
     ports:
       - "3000:3000"
     depends_on:

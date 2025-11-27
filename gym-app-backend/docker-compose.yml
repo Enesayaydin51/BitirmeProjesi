@@ -31,6 +31,31 @@ services:
     networks:
       - gym-app-network
 
+  gym-app-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gym-app-backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: gym_app_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: gym_app_jwt_secret_key_2024_very_secure
+      JWT_EXPIRES_IN: 24h
+      PORT: 3000
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - gym-app-network
+    volumes:
+      - ./.env:/app/.env
+
 volumes:
   postgres_data:
 

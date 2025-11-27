@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -6,11 +6,20 @@ import {
   Image,
   ScrollView,
   Pressable,
+  Alert,
+  TextInput,
 } from "react-native";
 import Layout from "../components/Layout";
 import { CustomButton } from "../components";
+import { useSelector, useDispatch } from "react-redux";
+import { setUserDetails, clearUser } from "../redux/userSlice";
+import apiService from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ProfilePage = () => {
+  const dispatch = useDispatch();
+  const { user, userDetails } = useSelector((state) => state.user);
+  
   const [illnesses, setIllnesses] = useState({
     belFitigi: false,
     dizSakatligi: false,
@@ -18,14 +27,96 @@ const ProfilePage = () => {
   });
 
   const [goal, setGoal] = useState("Kilo Alma"); // Varsayılan hedef
-  const [weeks, setWeeks] = useState(6); // Örnek: kullanıcı 6 haftadır antrenman yapıyor
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [userData, setUserData] = useState(null);
 
-  const userData = {
-    name: "Efe Şahin",
-    email: "efe.sahin@example.com",
-    age: 22,
-    height: 178,
-    weight: 70,
+  // Kullanıcı bilgilerini yükle
+  useEffect(() => {
+    loadUserData();
+    loadUserDetails();
+  }, [user, userDetails]);
+
+  const loadUserData = async () => {
+    try {
+      // Önce Redux'tan kontrol et
+      if (user) {
+        setUserData(user);
+        return;
+      }
+      
+      // Redux'ta yoksa AsyncStorage'dan yükle
+      const userString = await AsyncStorage.getItem('user');
+      if (userString) {
+        const parsedUser = JSON.parse(userString);
+        setUserData(parsedUser);
+      }
+    } catch (error) {
+      console.error('Kullanıcı bilgileri yüklenirken hata:', error);
+    }
+  };
+
+  const loadUserDetails = async () => {
+    try {
+      // Önce Redux'tan kontrol et
+      if (userDetails) {
+        setHeight(userDetails.height?.toString() || "");
+        setWeight(userDetails.weight?.toString() || "");
+        setGoal(userDetails.goal || "Kilo Alma");
+        if (userDetails.injuries) {
+          const injuriesArray = Array.isArray(userDetails.injuries) 
+            ? userDetails.injuries 
+            : [];
+          setIllnesses({
+            belFitigi: injuriesArray.includes("Bel Fıtığı"),
+            dizSakatligi: injuriesArray.includes("Diz Sakatlığı"),
+            yuksekTansiyon: injuriesArray.includes("Yüksek Tansiyon"),
+          });
+        }
+        return;
+      }
+
+      // Backend'den user details çek
+      const response = await apiService.getUserDetails();
+      console.log('User details response:', response);
+      if (response.success && response.data) {
+        console.log('User details data:', response.data);
+        console.log('Goal from backend:', response.data.goal);
+        dispatch(setUserDetails(response.data));
+        setHeight(response.data.height?.toString() || "");
+        setWeight(response.data.weight?.toString() || "");
+        setGoal(response.data.goal || "Kilo Alma");
+        console.log('Goal set to:', response.data.goal || "Kilo Alma");
+        if (response.data.injuries) {
+          const injuriesArray = Array.isArray(response.data.injuries) 
+            ? response.data.injuries 
+            : [];
+          setIllnesses({
+            belFitigi: injuriesArray.includes("Bel Fıtığı"),
+            dizSakatligi: injuriesArray.includes("Diz Sakatlığı"),
+            yuksekTansiyon: injuriesArray.includes("Yüksek Tansiyon"),
+          });
+        }
+      }
+    } catch (error) {
+      console.error('User details yüklenirken hata:', error);
+      // İlk kez açılıyorsa hata normal, detaylar henüz kaydedilmemiş olabilir
+    }
+  };
+
+  const getUserFullName = () => {
+    if (userData) {
+      if (userData.firstName && userData.lastName) {
+        return `${userData.firstName} ${userData.lastName}`;
+      }
+      return userData.email?.split('@')[0] || "Kullanıcı";
+    }
+    return "Kullanıcı";
+  };
+
+  const getUserEmail = () => {
+    return userData?.email || "";
   };
 
   const toggleIllness = (key) => {
@@ -41,6 +132,118 @@ const ProfilePage = () => {
     return list.length > 0 ? list.join(", ") : "Yok";
   };
 
+  const getTrainingDays = () => {
+    // Kullanıcının kayıt tarihini al
+    const registrationDate = userData?.createdAt || user?.createdAt;
+    
+    if (!registrationDate) {
+      return 1; // Tarih yoksa varsayılan olarak 1 gün göster
+    }
+
+    // Tarih string'ini Date objesine çevir
+    const registration = new Date(registrationDate);
+    const today = new Date();
+    
+    // Bugünün başlangıcını al (saat, dakika, saniye sıfırla)
+    today.setHours(0, 0, 0, 0);
+    registration.setHours(0, 0, 0, 0);
+    
+    // Gün farkını hesapla
+    const diffTime = today - registration;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    // En az 1 gün göster (bugün kayıt olanlar için de 1 gün)
+    return Math.max(1, diffDays);
+  };
+
+  const getInjuriesArray = () => {
+    const { belFitigi, dizSakatligi, yuksekTansiyon } = illnesses;
+    let list = [];
+    if (belFitigi) list.push("Bel Fıtığı");
+    if (dizSakatligi) list.push("Diz Sakatlığı");
+    if (yuksekTansiyon) list.push("Yüksek Tansiyon");
+    return list;
+  };
+
+  const handleSaveProfile = async () => {
+    console.log('=== HANDLE SAVE PROFILE ===');
+    console.log('Current goal state:', goal);
+    console.log('Goal type:', typeof goal);
+    console.log('Goal value:', goal);
+    console.log('Is goal empty?', !goal);
+    
+    if (!height || !weight) {
+      Alert.alert("Hata", "Lütfen boy ve kilo bilgilerini girin");
+      return;
+    }
+
+    if (!goal || goal.trim() === '') {
+      Alert.alert("Hata", "Lütfen bir fitness hedefi seçin");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const detailsData = {
+        height: parseInt(height),
+        weight: parseFloat(weight),
+        injuries: getInjuriesArray(),
+        goal: goal.trim(), // Fitness hedefini ekle ve trim et
+      };
+
+      console.log('Saving profile with data:', JSON.stringify(detailsData, null, 2));
+      console.log('Goal in detailsData:', detailsData.goal);
+      const response = await apiService.updateUserDetails(detailsData);
+      console.log('Update response:', response);
+      
+      if (response.success) {
+        console.log('Response data:', response.data);
+        console.log('Goal in response:', response.data?.goal);
+        dispatch(setUserDetails(response.data));
+        Alert.alert("Başarılı", "Profil bilgileriniz kaydedildi");
+      } else {
+        Alert.alert("Hata", response.message || "Profil kaydedilirken bir hata oluştu");
+      }
+    } catch (error) {
+      console.error("Profil kaydetme hatası:", error);
+      Alert.alert("Hata", error.message || "Profil kaydedilirken bir hata oluştu");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Çıkış Yap",
+      "Çıkış yapmak istediğinize emin misiniz?",
+      [
+        {
+          text: "İptal",
+          style: "cancel"
+        },
+        {
+          text: "Çıkış Yap",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // AsyncStorage'dan token ve user bilgilerini temizle
+              await apiService.logout();
+              
+              // Redux state'ini temizle
+              dispatch(clearUser());
+              
+              console.log("Çıkış yapıldı");
+            } catch (error) {
+              console.error("Çıkış yapma hatası:", error);
+              // Hata olsa bile Redux state'ini temizle
+              dispatch(clearUser());
+            }
+          }
+        }
+      ]
+    );
+  };
+
   return (
     <Layout>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -49,24 +252,34 @@ const ProfilePage = () => {
             style={styles.profileImage}
             source={require("../../assets/images/profiletabicon.png")}
           />
-          <Text style={styles.name}>{userData.name}</Text>
-          <Text style={styles.email}>{userData.email}</Text>
+          <Text style={styles.name}>{getUserFullName()}</Text>
+          <Text style={styles.email}>{getUserEmail()}</Text>
 
           {/* Kişisel Bilgiler */}
           <View style={styles.infoBox}>
             <Text style={styles.infoTitle}>Kişisel Bilgiler</Text>
 
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Yaş:</Text>
-              <Text style={styles.value}>{userData.age}</Text>
+              <Text style={styles.label}>Boy (cm):</Text>
+              <TextInput
+                style={styles.input}
+                value={height}
+                onChangeText={setHeight}
+                placeholder="Boy"
+                placeholderTextColor="#999"
+                keyboardType="numeric"
+              />
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.label}>Boy:</Text>
-              <Text style={styles.value}>{userData.height} cm</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Kilo:</Text>
-              <Text style={styles.value}>{userData.weight} kg</Text>
+              <Text style={styles.label}>Kilo (kg):</Text>
+              <TextInput
+                style={styles.input}
+                value={weight}
+                onChangeText={setWeight}
+                placeholder="Kilo"
+                placeholderTextColor="#999"
+                keyboardType="numeric"
+              />
             </View>
           </View>
 
@@ -80,7 +293,11 @@ const ProfilePage = () => {
                   styles.option,
                   goal === item && styles.optionSelected,
                 ]}
-                onPress={() => setGoal(item)}
+                onPress={() => {
+                  console.log('Goal seçildi:', item);
+                  setGoal(item);
+                  console.log('Goal state güncellendi:', item);
+                }}
               >
                 <Text
                   style={[
@@ -136,7 +353,7 @@ const ProfilePage = () => {
           <View style={styles.trainingBox}>
             <Text style={styles.infoTitle}>Antrenman Süresi</Text>
             <Text style={styles.trainingWeeks}>
-              {weeks} haftadır aktif antrenman yapıyor 💪
+              {getTrainingDays()} gündür gym app ile antrenman yapıyorsunuz 💪
             </Text>
           </View>
 
@@ -144,15 +361,20 @@ const ProfilePage = () => {
           <CustomButton
             buttonText="Profili Kaydet"
             setWidth="80%"
-            handleOnPress={() =>
-              console.log({
-                goal,
-                illnesses,
-                weeks,
-              })
-            }
+            handleOnPress={handleSaveProfile}
             buttonColor="#FFA040"
             pressedButtonColor="#f89028ff"
+            disabled={isLoading}
+          />
+
+          {/* Çıkış Yap Butonu */}
+          <CustomButton
+            buttonText="Çıkış Yap"
+            setWidth="80%"
+            handleOnPress={handleLogout}
+            buttonColor="#ff4444"
+            pressedButtonColor="#cc0000"
+            disabled={isLoading}
           />
         </View>
       </ScrollView>
@@ -289,5 +511,15 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "600",
+  },
+  input: {
+    color: "white",
+    fontSize: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FFA040",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    minWidth: 80,
+    textAlign: "right",
   },
 });

@@ -12,8 +12,11 @@ Modern bir gym yönetim uygulaması. React Native (Expo) frontend, Node.js backe
 - [Frontend (Expo) Geliştirme](#-frontend-expo-geliştirme)
 - [Backend (Opsiyonel) Manuel Çalıştırma](#-backend-opsiyonel-manuel-çalıştırma)
 - [PgAdmin ve Veritabanı](#-pgadmin-ve-veritabanı)
+- [AI Asistan (Google Gemini) Kurulumu](#-ai-asistan-google-gemini-kurulumu)
+- [Veritabanı Migration ve Tablo Oluşturma](#-veritabanı-migration-ve-tablo-oluşturma)
 - [Proje Yapısı](#-proje-yapısı)
 - [Sorun Giderme](#-sorun-giderme)
+- [Son Güncellemeler](#-son-güncellemeler-2025-11-07)
 - [Katkıda Bulunma](#-katkıda-bulunma)
 
 ## ✨ Özellikler
@@ -25,6 +28,8 @@ Modern bir gym yönetim uygulaması. React Native (Expo) frontend, Node.js backe
 - 🐳 Docker containerization
 - 🔒 JWT token authentication
 - 📊 Clean Architecture (DDD)
+- 🤖 AI Asistan - Beslenme önerileri ve soru-cevap
+- 📅 Antrenman süresi takibi (kayıt tarihinden itibaren)
 
 ## 🛠️ Teknolojiler
 
@@ -42,6 +47,7 @@ Modern bir gym yönetim uygulaması. React Native (Expo) frontend, Node.js backe
 - **JWT** - JSON Web Token authentication
 - **bcryptjs** - Password hashing
 - **Swagger** - API dokümantasyonu
+- **Google Gemini API** - Yapay zeka entegrasyonu (gemini-2.5-flash, gemini-2.5-pro)
 
 ### DevOps
 - **Docker** - Containerization
@@ -131,6 +137,8 @@ docker compose logs -f backend
 docker compose down
 ```
 
+**Önemli:** İlk kez `docker compose up -d` çalıştırdığınızda, veritabanı migration dosyaları otomatik olarak çalıştırılır ve tüm tablolar oluşturulur. Detaylar için [Veritabanı Migration](#-veritabanı-migration-ve-tablo-oluşturma) bölümüne bakın.
+
 Erişim adresleri:
 - **Backend API**: http://localhost:3000
 - **PgAdmin**: http://localhost:5050 (kullanıcı: `admin@gymapp.com`, şifre: `admin123`)
@@ -175,6 +183,214 @@ PgAdmin ile veritabanını yönetebilirsiniz:
 5. Connection > Host: `postgres`, Port: `5432`, Username: `postgres`, Password: `postgres`
 
 Not: `Host` alanında `postgres` kullanmamızın sebebi, Docker Compose ağında veritabanı servisi adının `postgres` olmasıdır.
+
+## 🤖 AI Asistan (Google Gemini) Kurulumu
+
+Projede beslenme önerileri ve soru-cevap için Google Gemini API entegrasyonu bulunmaktadır. Gemini API, OpenAI'ye göre daha uygun fiyatlı bir alternatiftir.
+
+### 1. Google Gemini API Key Alma
+
+1. **Google AI Studio hesabı oluşturun:**
+   - https://aistudio.google.com/ adresine gidin
+   - Google hesabınızla giriş yapın
+
+2. **API Key oluşturun:**
+   - Sol menüden "Get API key" veya "API Keys" seçeneğine tıklayın
+   - "Create API key" butonuna tıklayın
+   - Oluşturulan key'i kopyalayın (bir daha gösterilmeyecek!)
+
+3. **Ücretsiz Kullanım:**
+   - **Not:** Gemini API ücretsiz tier sunmaktadır (günlük limitlerle)
+   - Ücretsiz kullanım için herhangi bir kredi kartı eklemenize gerek yok
+   - Daha fazla kullanım için Google Cloud Console'dan billing ayarlayabilirsiniz
+
+### 2. Backend'de .env Dosyası Oluşturma
+
+Backend klasöründe (`gym-app-backend/`) `.env` adında bir dosya oluşturun:
+
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=gym_app_db
+DB_USER=postgres
+DB_PASSWORD=postgres
+
+# JWT Configuration
+JWT_SECRET=gym_app_jwt_secret_key_2024_very_secure
+JWT_EXPIRES_IN=24h
+
+# Server Configuration
+PORT=3000
+
+# Google Gemini API Configuration
+GEMINI_API_KEY=your-gemini-api-key-here
+```
+
+**Önemli:** `GEMINI_API_KEY` değerini kendi API key'inizle değiştirin.
+
+### 3. API Key'i Test Etme (Önerilen)
+
+Docker ile uğraşmadan önce, API key'inizin çalışıp çalışmadığını test edin:
+
+```bash
+cd gym-app-backend
+node test-ai.js
+```
+
+Bu test dosyası:
+- API key'inizi kontrol eder
+- Mevcut modelleri listeler
+- Çalışan bir model ile test isteği gönderir
+
+**Başarılı çıktı örneği:**
+```
+✅ BAŞARILI! Model: gemini-2.5-flash
+   Cevap: Merhaba! Ben iyiyim, teşekkür ederim...
+```
+
+**Eğer 404 hatası alırsanız:**
+- API key'inizi kontrol edin
+- Yeni bir API key oluşturmayı deneyin
+- Google AI Studio'da API key'inizin aktif olduğundan emin olun
+
+### 4. Docker Container'ı Yeniden Build Etme
+
+Gemini paketi eklendiği için container'ı yeniden build etmeniz gerekir:
+
+```bash
+cd BitirmeProjesiG-ncel
+
+# Container'ları durdurun
+docker-compose down
+
+# Container'ı yeniden build edin (cache olmadan)
+docker-compose build --no-cache backend
+
+# Container'ları başlatın
+docker-compose up -d
+```
+
+**Veya manuel kurulum için:**
+```bash
+cd gym-app-backend
+npm install
+```
+
+**Not:** `docker-compose.yml` dosyasında `GEMINI_API_KEY` değerini güncellemeyi unutmayın!
+
+### 5. Kullanılan Modeller
+
+Proje, Google Gemini API'nin v1 endpoint'ini kullanır ve şu modelleri sırayla dener:
+
+1. **gemini-2.5-flash** (Öncelikli) - En hızlı ve ucuz model
+2. **gemini-2.5-pro** - Daha karmaşık işler için
+3. **gemini-2.0-flash** - Yedek flash model
+4. **gemini-2.0-flash-001** - Alternatif
+
+Sistem otomatik olarak çalışan ilk modeli kullanır. Eğer bir model başarısız olursa, bir sonrakini dener.
+
+**Önemli:** SDK otomatik olarak v1 API endpoint'ini kullanır. Eski v1beta API kullanılmaz.
+
+### 6. AI Özelliklerini Kullanma
+
+1. **Frontend'de Beslenme sayfasına gidin**
+2. **"🤖 AI Asistan" sekmesine tıklayın**
+3. **İki özellik kullanılabilir:**
+   - **💬 Soru Sor:** Beslenme ile ilgili sorular sorabilirsiniz
+   - **📋 Kişiselleştirilmiş Plan:** AI tarafından oluşturulan beslenme planı
+
+### 7. Sorun Giderme
+
+#### "404 Not Found - models/... is not found for API version v1beta" Hatası
+
+Bu hata, SDK'nın yanlış API versiyonunu kullandığını gösterir. Çözüm:
+
+1. **API Key'i test edin:**
+   ```bash
+   cd gym-app-backend
+   node test-ai.js
+   ```
+
+2. **Eğer test başarısız olursa:**
+   - Yeni bir API key oluşturun (Google AI Studio'dan)
+   - `docker-compose.yml` dosyasındaki `GEMINI_API_KEY` değerini güncelleyin
+   - Container'ı yeniden başlatın: `docker-compose restart backend`
+
+3. **Model listesini kontrol edin:**
+   - Test dosyası otomatik olarak mevcut modelleri listeler
+   - Çalışan modelleri gösterir
+
+#### "Gemini API kotası aşıldı" Hatası
+- Google AI Studio hesabınızda günlük limitinizi kontrol edin
+- Ücretsiz tier'da günlük limitler vardır, ertesi gün sıfırlanır
+- Daha fazla kullanım için Google Cloud Console'dan billing ayarlayın
+
+#### "Gemini API anahtarı geçersiz" Hatası
+- `.env` dosyasındaki `GEMINI_API_KEY` değerini kontrol edin
+- `docker-compose.yml` dosyasındaki `GEMINI_API_KEY` değerini kontrol edin
+- API key'in doğru kopyalandığından emin olun
+- API key'in Google AI Studio'dan oluşturulduğundan emin olun
+- Container'ı yeniden başlatın: `docker-compose restart backend`
+
+#### "Cannot find module '@google/generative-ai'" Hatası
+- Container'ı yeniden build edin (yukarıdaki adım 4'e bakın)
+- `npm install` komutunu backend klasöründe çalıştırın
+
+#### "Tüm modeller başarısız" Hatası
+- API key'inizi test edin: `node test-ai.js`
+- Yeni bir API key oluşturmayı deneyin
+- Google AI Studio'da API key'inizin aktif olduğundan emin olun
+- Container loglarını kontrol edin: `docker-compose logs -f backend`
+
+### 8. AI Özelliklerini Devre Dışı Bırakma
+
+Eğer Gemini API kullanmak istemiyorsanız:
+- `.env` dosyasından `GEMINI_API_KEY` satırını kaldırın veya boş bırakın
+- Uygulama çalışmaya devam eder, sadece AI özellikleri çalışmaz
+
+## 🗃️ Veritabanı Migration ve Tablo Oluşturma
+
+### Otomatik Migration (İlk Kurulum)
+
+Proje `docker-compose up` ile ilk kez çalıştırıldığında, `gym-app-backend/gym-app-database/` klasöründeki tüm SQL dosyaları **otomatik olarak** çalıştırılır ve tablolar oluşturulur.
+
+**Yeni Kullanıcılar için:**
+```bash
+# İlk kez çalıştırma - Tüm tablolar otomatik oluşturulur!
+docker-compose up -d
+```
+
+**Önemli Notlar:**
+- Migration dosyaları sadece **ilk başlatmada** (veritabanı volume'u boşken) çalışır
+- Eğer veritabanı daha önce oluşturulduysa, migration dosyaları tekrar çalışmaz
+- Mevcut veritabanını sıfırlamak için (⚠️ TÜM VERİLER SİLİNİR):
+
+```bash
+# Veritabanını tamamen sıfırla
+docker-compose down -v
+docker-compose up -d
+```
+
+### Manuel Migration (Gerekirse)
+
+Eğer migration dosyalarını manuel olarak çalıştırmak isterseniz:
+
+```bash
+# Docker container içinde SQL dosyasını çalıştır
+docker-compose exec postgres psql -U postgres -d gym_app_db -f /docker-entrypoint-initdb.d/06_add_goal_to_user_details.sql
+
+# Veya PgAdmin üzerinden SQL dosyasını açıp çalıştırın
+```
+
+### Yeni Migration Ekleme
+
+Yeni bir migration eklemek için:
+1. `gym-app-backend/gym-app-database/` klasörüne yeni bir SQL dosyası ekleyin
+2. Dosya adını numara ile başlatın (örn: `07_add_new_column.sql`)
+3. Dosyalar alfabetik sırayla çalıştırılır, numaralandırma önemlidir
+4. Git'e commit ve push yapın
+5. Takım arkadaşları `docker-compose down -v && docker-compose up -d` ile güncellemeleri alabilir
 
 ## 🔐 Örnek Auth İstekleri
 
@@ -344,6 +560,91 @@ Bu proje MIT lisansı altında lisanslanmıştır.
 
 ---
 
+## 📝 Son Güncellemeler
+
+### 🆕 2025-11-25 - Gemini API Güncellemeleri
+
+#### ✨ Yeni Özellikler
+
+1. **🧪 API Key Test Sistemi**
+   - `test-ai.js` test dosyası eklendi
+   - API key'inizi Docker olmadan test edebilirsiniz
+   - Mevcut modelleri otomatik listeler
+   - Çalışan modelleri otomatik tespit eder
+
+2. **🔄 Model Fallback Mekanizması**
+   - Birden fazla model sırayla denenir
+   - İlk çalışan model otomatik kullanılır
+   - Hata durumunda bir sonraki modele geçer
+   - Tüm modeller başarısız olursa detaylı hata mesajı verir
+
+3. **📊 Güncel Model Desteği**
+   - `gemini-2.5-flash` (öncelikli, test edildi ✅)
+   - `gemini-2.5-pro` (karmaşık işler için)
+   - `gemini-2.0-flash` (yedek)
+   - `gemini-2.0-flash-001` (alternatif)
+
+#### 🔧 Teknik İyileştirmeler
+
+- **API Versiyonu Sorunu Çözüldü:**
+  - SDK artık v1 API endpoint'ini kullanıyor
+  - v1beta API sorunları giderildi
+  - ListModels API ile mevcut modeller kontrol ediliyor
+
+- **Hata Yönetimi:**
+  - Model bazlı hata yakalama eklendi
+  - Her model denemesi loglanıyor
+  - Başarılı model loglanıyor
+  - Detaylı hata mesajları eklendi
+
+- **Kod İyileştirmeleri:**
+  - `AIService.js` refactor edildi
+  - JSON temizleme yardımcı fonksiyonu eklendi
+  - Hata yönetimi merkezileştirildi
+  - Kod tekrarı azaltıldı
+
+### 📅 2025-11-07 - İlk Gemini Entegrasyonu
+
+#### ✨ Yeni Özellikler
+
+1. **🤖 AI Asistan Entegrasyonu**
+   - Beslenme sayfasına AI Asistan sekmesi eklendi
+   - Kullanıcılar beslenme ile ilgili sorular sorabilir
+   - AI tarafından kişiselleştirilmiş beslenme planları oluşturulabilir
+   - Google Gemini API kullanılıyor (ücretsiz ve uygun fiyatlı)
+   - Kullanıcı bilgilerine göre (hedef, boy, kilo, sağlık durumu) özelleştirilmiş öneriler
+
+2. **📅 Antrenman Süresi Takibi**
+   - Profil sayfasında kullanıcının kayıt tarihinden itibaren geçen gün sayısı gösteriliyor
+   - "X gündür gym app ile antrenman yapıyorsunuz 💪" formatında mesaj
+   - Otomatik hesaplama yapılıyor
+
+#### 🔧 Teknik Değişiklikler
+
+- **Backend:**
+  - Google Gemini API paketi eklendi (`@google/generative-ai@^0.24.1`)
+  - AI servisi oluşturuldu (`AIService.js`)
+  - AI controller ve route'ları eklendi
+  - Hata yönetimi iyileştirildi (quota, API key hataları için özel mesajlar)
+  - OpenAI'den Gemini API'ye geçiş yapıldı (daha uygun fiyatlı alternatif)
+
+- **Frontend:**
+  - DietPage'e AI Asistan sekmesi eklendi
+  - API servisine AI endpoint'leri eklendi
+  - ProfilePage'de antrenman süresi hesaplama fonksiyonu eklendi
+
+- **Docker:**
+  - Backend servisi docker-compose.yml'e eklendi
+  - `.env` dosyası volume olarak mount edildi
+
+#### 📚 Dokümantasyon
+
+- Google Gemini API kurulum ve kullanım kılavuzu eklendi
+- Hata mesajları Türkçe'ye çevrildi
+- Swagger UI'da authentication desteği eklendi
+- API key test etme bölümü eklendi
+- Sorun giderme bölümü genişletildi
+
 ## 🎯 Gelecek Özellikler
 
 - [ ] Gym salonu yönetimi
@@ -352,6 +653,8 @@ Bu proje MIT lisansı altında lisanslanmıştır.
 - [ ] Push notifications
 - [ ] Offline mode
 - [ ] Social features
+- [ ] AI ile antrenman programı önerileri
+- [ ] AI ile ilerleme analizi
 
 ---
 

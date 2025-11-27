@@ -29,6 +29,8 @@ const initialState = {
   password: null,
   isLoading: false,
   isAuth: false,
+  user: null, // Kullanıcı bilgileri burada tutulacak
+  userDetails: null, // Kullanıcı detayları (height, weight, injuries)
   users:{
     userEmail: "test@test.com",
     userPassword:"123456",
@@ -57,6 +59,22 @@ export const userSlice = createSlice({
             else {
                 state.isAuth = false;
             }
+        },
+        setAuth: (state, action) => {
+            state.isAuth = action.payload;
+        },
+        setUser: (state, action) => {
+            state.user = action.payload;
+        },
+        setUserDetails: (state, action) => {
+            state.userDetails = action.payload;
+        },
+        clearUser: (state) => {
+            state.user = null;
+            state.userDetails = null;
+            state.isAuth = false;
+            state.email = null;
+            state.password = null;
         }
     },
     // extraReducers:(builder)=>{
@@ -72,5 +90,5 @@ export const userSlice = createSlice({
 })
 
 
-export const {  setEmail , setPassword , setIsLoading , setLogin } = userSlice.actions;
+export const {  setEmail , setPassword , setIsLoading , setLogin , setAuth , setUser , setUserDetails , clearUser } = userSlice.actions;
 export default userSlice.reducer;

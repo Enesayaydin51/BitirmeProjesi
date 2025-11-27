@@ -172,13 +172,16 @@ class AuthController {
   async getUserDetails(req, res, next) {
     try {
       const userId = req.user.id;
+      console.log('Getting user details for userId:', userId);
       const userDetails = await this.userRepository.getUserDetails(userId);
+      console.log('User details from database:', userDetails);
       
       res.status(200).json({
         success: true,
         data: userDetails
       });
     } catch (error) {
+      console.error('Error getting user details:', error);
       next(error);
     }
   }
@@ -186,13 +189,47 @@ class AuthController {
   async updateUserDetails(req, res, next) {
     try {
       const userId = req.user.id;
-      const { height, weight, injuries } = req.body;
+      console.log('=== UPDATE USER DETAILS REQUEST ===');
+      console.log('Full request body:', JSON.stringify(req.body, null, 2));
+      console.log('Request body keys:', Object.keys(req.body));
       
-      const userDetails = await this.userRepository.updateUserDetails(userId, {
+      const { height, weight, injuries, goal } = req.body;
+      
+      console.log('Destructured values:', { 
+        height, 
+        weight, 
+        injuries, 
+        goal,
+        goalType: typeof goal,
+        goalValue: goal,
+        isGoalEmpty: !goal,
+        isGoalNull: goal === null,
+        isGoalUndefined: goal === undefined
+      });
+      
+      // Validate goal if provided
+      const validGoals = ['Kilo Alma', 'Kilo Verme', 'Kilo Koruma'];
+      if (goal && !validGoals.includes(goal)) {
+        console.log('Invalid goal value:', goal);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid goal. Must be one of: Kilo Alma, Kilo Verme, Kilo Koruma'
+        });
+      }
+      
+      const detailsToSave = {
         height: parseInt(height),
         weight: parseFloat(weight),
-        injuries: injuries || []
-      });
+        injuries: injuries || [],
+        goal: goal || null
+      };
+      
+      console.log('Details to save to database:', detailsToSave);
+      
+      const userDetails = await this.userRepository.updateUserDetails(userId, detailsToSave);
+      
+      console.log('User details updated:', userDetails);
+      console.log('=== END UPDATE ===');
       
       res.status(200).json({
         success: true,
@@ -200,6 +237,8 @@ class AuthController {
         data: userDetails
       });
     } catch (error) {
+      console.error('Error updating user details:', error);
+      console.error('Error stack:', error.stack);
       next(error);
     }
   }

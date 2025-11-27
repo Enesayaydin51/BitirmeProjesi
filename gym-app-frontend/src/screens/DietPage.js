@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,8 +8,13 @@ import {
   Pressable,
   Modal,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import Layout from "../components/Layout";
+import apiService from "../services/api";
+import { useSelector, useDispatch } from "react-redux";
+import { setUserDetails } from "../redux/userSlice";
 
 const foodDatabase = [
   { name: "Tavuk Göğsü (100g)", calories: 165, protein: 31, carb: 0, fat: 3.6 },
@@ -25,8 +30,28 @@ const foodDatabase = [
 ];
 
 const DietPage = () => {
+  const dispatch = useDispatch();
+  const { userDetails } = useSelector((state) => state.user);
   const [activeTab, setActiveTab] = useState("Önerilen");
   const [goal, setGoal] = useState("Kilo Verme");
+
+  // Kullanıcı bilgilerini yükle
+  useEffect(() => {
+    const loadUserDetails = async () => {
+      // Redux'ta yoksa API'den çek
+      if (!userDetails) {
+        try {
+          const response = await apiService.getUserDetails();
+          if (response.success && response.data) {
+            dispatch(setUserDetails(response.data));
+          }
+        } catch (error) {
+          console.warn("User details yüklenemedi:", error);
+        }
+      }
+    };
+    loadUserDetails();
+  }, []);
 
   const [customFoods, setCustomFoods] = useState([]);
   const [foodName, setFoodName] = useState("");
@@ -35,6 +60,13 @@ const DietPage = () => {
   const [carb, setCarb] = useState("");
   const [fat, setFat] = useState("");
   const [foodModalVisible, setFoodModalVisible] = useState(false);
+
+  // AI Asistan state'leri
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiPlan, setAiPlan] = useState(null);
+  const [aiPlanLoading, setAiPlanLoading] = useState(false);
 
   const dietPlans = {
     "Kilo Verme": {
@@ -110,6 +142,135 @@ const DietPage = () => {
     setFoodModalVisible(false);
   };
 
+  // AI fonksiyonları
+  const askAI = async () => {
+    if (!aiQuestion.trim()) {
+      Alert.alert("Hata", "Lütfen bir soru girin");
+      return;
+    }
+
+    setAiLoading(true);
+    
+    // Backend bağlantısını kontrol et
+    try {
+      const healthCheck = await apiService.healthCheck();
+      console.log("Backend health check:", healthCheck);
+    } catch (healthError) {
+      console.warn("Backend health check başarısız:", healthError);
+      // Health check başarısız olsa bile devam et, belki sadece /health endpoint'i yoktur
+    }
+    try {
+      const response = await apiService.askNutritionQuestion(aiQuestion);
+      if (response.success) {
+        setAiAnswer(response.data.answer);
+        setAiQuestion("");
+      } else {
+        Alert.alert("Hata", response.message || "Bir hata oluştu");
+      }
+    } catch (error) {
+      console.error("AI soru hatası:", error);
+      console.error("Hata detayları:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // Daha açıklayıcı hata mesajları
+      let errorMessage = "AI servisine ulaşılamadı. Lütfen daha sonra tekrar deneyin.";
+      let errorTitle = "Hata";
+      
+      if (error.message) {
+        if (error.message.includes("timeout") || error.message.includes("zaman aşımı")) {
+          errorMessage = "İstek zaman aşımına uğradı. Lütfen tekrar deneyin.";
+        } else if (error.message.includes("overloaded") || error.message.includes("aşırı yüklü")) {
+          errorMessage = "AI servisi şu an çok yoğun. Lütfen birkaç saniye bekleyip tekrar deneyin.";
+        } else if (error.message.includes("network") || error.message.includes("bağlantı") || error.message.includes("Backend")) {
+          errorTitle = "Bağlantı Hatası";
+          errorMessage = "Backend servisine ulaşılamıyor.\n\nKontrol edin:\n• Backend çalışıyor mu? (docker-compose ps)\n• API URL doğru mu?\n• İnternet bağlantınız aktif mi?\n\nGerçek cihazda kullanıyorsanız, bilgisayarınızın IP adresini kullanın.";
+        } else if (error.message.includes("Kota")) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert(errorTitle, errorMessage);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const generateAIPlan = async () => {
+    setAiPlanLoading(true);
+    try {
+      // Önce kullanıcı bilgilerini kontrol et ve güncelle
+      let currentUserDetails = userDetails;
+      
+      // Eğer Redux'ta userDetails yoksa, API'den çek
+      if (!currentUserDetails) {
+        try {
+          const detailsResponse = await apiService.getUserDetails();
+          if (detailsResponse.success && detailsResponse.data) {
+            currentUserDetails = detailsResponse.data;
+          }
+        } catch (error) {
+          console.warn("User details çekilemedi:", error);
+        }
+      }
+
+      // Kullanıcı bilgilerinin dolu olup olmadığını kontrol et
+      const hasRequiredInfo = currentUserDetails && 
+        (currentUserDetails.goal || currentUserDetails.height || currentUserDetails.weight);
+
+      if (!hasRequiredInfo) {
+        Alert.alert(
+          "Bilgi Eksik",
+          "Kişiselleştirilmiş plan oluşturmak için lütfen profil sayfasından boy, kilo ve hedef bilgilerinizi güncelleyin.",
+          [
+            { text: "Tamam", style: "cancel" }
+          ]
+        );
+        setAiPlanLoading(false);
+        return;
+      }
+
+      // Plan oluştur
+      const response = await apiService.generateAIPlan();
+      if (response.success) {
+        setAiPlan(response.data);
+        Alert.alert(
+          "Başarılı",
+          "Kişiselleştirilmiş beslenme planınız hazırlandı! Profil bilgilerinize göre özelleştirildi."
+        );
+      } else {
+        Alert.alert("Hata", response.message || "Plan oluşturulamadı");
+      }
+    } catch (error) {
+      console.error("AI plan hatası:", error);
+      
+      // Daha açıklayıcı hata mesajları
+      let errorMessage = "Beslenme planı oluşturulamadı. Lütfen daha sonra tekrar deneyin.";
+      
+      if (error.message) {
+        if (error.message.includes("timeout") || error.message.includes("zaman aşımı")) {
+          errorMessage = "İstek zaman aşımına uğradı. Lütfen tekrar deneyin.";
+        } else if (error.message.includes("overloaded") || error.message.includes("aşırı yüklü")) {
+          errorMessage = "AI servisi şu an çok yoğun. Lütfen birkaç saniye bekleyip tekrar deneyin.";
+        } else if (error.message.includes("network") || error.message.includes("bağlantı")) {
+          errorMessage = "Ağ bağlantı hatası. İnternet bağlantınızı kontrol edin.";
+        } else if (error.message.includes("Kota")) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert("Hata", errorMessage);
+    } finally {
+      setAiPlanLoading(false);
+    }
+  };
+
   return (
     <Layout>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -143,6 +304,19 @@ const DietPage = () => {
               ]}
             >
               Kendi Programım
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.tab, activeTab === "AI" && styles.activeTab]}
+            onPress={() => setActiveTab("AI")}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "AI" && styles.activeTabText,
+              ]}
+            >
+              🤖 AI Asistan
             </Text>
           </Pressable>
         </View>
@@ -253,6 +427,131 @@ const DietPage = () => {
                 </Text>
               </View>
             )}
+          </>
+        )}
+
+        {/* AI Asistan */}
+        {activeTab === "AI" && (
+          <>
+            <Text style={styles.sectionTitle}>AI Beslenme Asistanı</Text>
+            
+            {/* Soru Sorma Bölümü */}
+            <View style={styles.aiCard}>
+              <Text style={styles.aiCardTitle}>💬 Soru Sor</Text>
+              <TextInput
+                placeholder="Örn: Günde kaç kalori almalıyım?"
+                placeholderTextColor="#aaa"
+                value={aiQuestion}
+                onChangeText={setAiQuestion}
+                style={styles.aiInput}
+                multiline
+              />
+              <Pressable
+                style={[styles.aiButton, aiLoading && styles.aiButtonDisabled]}
+                onPress={askAI}
+                disabled={aiLoading}
+              >
+                {aiLoading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={styles.aiButtonText}>Sor</Text>
+                )}
+              </Pressable>
+              
+              {aiAnswer ? (
+                <View style={styles.aiAnswerBox}>
+                  <Text style={styles.aiAnswerTitle}>Cevap:</Text>
+                  <Text style={styles.aiAnswerText}>{aiAnswer}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Plan Oluşturma Bölümü */}
+            <View style={styles.aiCard}>
+              <Text style={styles.aiCardTitle}>📋 Kişiselleştirilmiş Plan</Text>
+              
+              {/* Kullanıcı Bilgileri Önizleme */}
+              {userDetails && (userDetails.goal || userDetails.height || userDetails.weight) && (
+                <View style={styles.userInfoBox}>
+                  <Text style={styles.userInfoTitle}>Profil Bilgileriniz:</Text>
+                  {userDetails.goal && (
+                    <Text style={styles.userInfoText}>🎯 Hedef: {userDetails.goal}</Text>
+                  )}
+                  {userDetails.height && (
+                    <Text style={styles.userInfoText}>📏 Boy: {userDetails.height} cm</Text>
+                  )}
+                  {userDetails.weight && (
+                    <Text style={styles.userInfoText}>⚖️ Kilo: {userDetails.weight} kg</Text>
+                  )}
+                  {userDetails.injuries && userDetails.injuries.length > 0 && (
+                    <Text style={styles.userInfoText}>
+                      ⚠️ Durum: {userDetails.injuries.join(", ")}
+                    </Text>
+                  )}
+                  <Text style={styles.userInfoNote}>
+                    Plan bu bilgilere göre oluşturulacaktır.
+                  </Text>
+                </View>
+              )}
+
+              <Pressable
+                style={[styles.aiButton, aiPlanLoading && styles.aiButtonDisabled]}
+                onPress={generateAIPlan}
+                disabled={aiPlanLoading}
+              >
+                {aiPlanLoading ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={styles.aiButtonText}>AI Planı Oluştur</Text>
+                )}
+              </Pressable>
+
+              {aiPlan ? (
+                <View style={styles.aiPlanBox}>
+                  <Text style={styles.aiPlanTitle}>Günlük Makrolar</Text>
+                  <Text style={styles.aiPlanText}>
+                    Kalori: {aiPlan.dailyCalories} kcal
+                  </Text>
+                  <Text style={styles.aiPlanText}>Protein: {aiPlan.protein}</Text>
+                  <Text style={styles.aiPlanText}>Karb: {aiPlan.carb}</Text>
+                  <Text style={styles.aiPlanText}>Yağ: {aiPlan.fat}</Text>
+
+                  {aiPlan.meals && aiPlan.meals.length > 0 && (
+                    <>
+                      <Text style={[styles.aiPlanTitle, { marginTop: 15 }]}>
+                        Öğünler
+                      </Text>
+                      {aiPlan.meals.map((meal, index) => (
+                        <View key={index} style={styles.aiMealBox}>
+                          <Text style={styles.aiMealTitle}>{meal.title}</Text>
+                          {meal.items?.map((item, idx) => (
+                            <Text key={idx} style={styles.aiMealItem}>
+                              • {item}
+                            </Text>
+                          ))}
+                          {meal.calories && (
+                            <Text style={styles.aiMealCalories}>
+                              {meal.calories} kcal
+                            </Text>
+                          )}
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {aiPlan.recommendations && (
+                    <>
+                      <Text style={[styles.aiPlanTitle, { marginTop: 15 }]}>
+                        Öneriler
+                      </Text>
+                      <Text style={styles.aiPlanText}>
+                        {aiPlan.recommendations}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              ) : null}
+            </View>
           </>
         )}
       </ScrollView>
@@ -436,4 +735,121 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   closeText: { color: "#000", textAlign: "center", fontWeight: "bold" },
+  // AI Asistan stilleri
+  aiCard: {
+    width: "90%",
+    backgroundColor: "rgba(26,26,26,0.85)",
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#FFA040",
+  },
+  aiCardTitle: {
+    color: "#FFA040",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  aiInput: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    color: "white",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
+  aiButton: {
+    backgroundColor: "#FFA040",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  aiButtonDisabled: {
+    opacity: 0.6,
+  },
+  aiButtonText: {
+    color: "#000",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  aiAnswerBox: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 10,
+  },
+  aiAnswerTitle: {
+    color: "#FFA040",
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  aiAnswerText: {
+    color: "#fff",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  aiPlanBox: {
+    marginTop: 15,
+  },
+  aiPlanTitle: {
+    color: "#FFA040",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  aiPlanText: {
+    color: "#fff",
+    fontSize: 15,
+    marginBottom: 5,
+  },
+  aiMealBox: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  aiMealTitle: {
+    color: "#FFA040",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  aiMealItem: {
+    color: "#fff",
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  aiMealCalories: {
+    color: "#aaa",
+    fontSize: 12,
+    marginTop: 5,
+  },
+  userInfoBox: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 15,
+    borderLeftWidth: 3,
+    borderLeftColor: "#FFA040",
+  },
+  userInfoTitle: {
+    color: "#FFA040",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
+  userInfoText: {
+    color: "#fff",
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  userInfoNote: {
+    color: "#aaa",
+    fontSize: 11,
+    marginTop: 8,
+    fontStyle: "italic",
+  },
 });

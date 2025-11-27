@@ -1,13 +1,73 @@
-import { StyleSheet, Text, View, Image, Pressable } from "react-native";
+import { StyleSheet, Text, View, Image, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useState } from "react";
-import { CustomButton, CustomTextInput } from "../components";
+import { CustomButton, CustomTextInput, Loading } from "../components";
 import Layout from "../components/Layout";
+import apiService from "../services/api";
 
 const SignupPage = ({ navigation }) => {
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleRegister = async () => {
+    // Validasyon
+    if (!firstName.trim()) {
+      Alert.alert("Hata", "Lütfen adınızı girin");
+      return;
+    }
+    if (!lastName.trim()) {
+      Alert.alert("Hata", "Lütfen soyadınızı girin");
+      return;
+    }
+    if (!email.trim()) {
+      Alert.alert("Hata", "Lütfen e-mail adresinizi girin");
+      return;
+    }
+    if (!password.trim()) {
+      Alert.alert("Hata", "Lütfen şifrenizi girin");
+      return;
+    }
+    if (password.length < 8) {
+      Alert.alert("Hata", "Şifre en az 8 karakter olmalıdır");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiService.register({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim().toLowerCase(),
+        password: password,
+      });
+
+      if (response.success) {
+        Alert.alert(
+          "Başarılı",
+          "Kayıt işlemi başarıyla tamamlandı! Giriş yapabilirsiniz.",
+          [
+            {
+              text: "Tamam",
+              onPress: () => navigation.navigate("Login"),
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Hata", response.message || "Kayıt işlemi başarısız oldu");
+      }
+    } catch (error) {
+      console.error("Register error:", error);
+      Alert.alert(
+        "Hata",
+        error.message || "Kayıt işlemi sırasında bir hata oluştu"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Layout>
@@ -25,11 +85,19 @@ const SignupPage = ({ navigation }) => {
 
             <View style={styles.TextInputContainer}>
               <CustomTextInput
-                title="Name"
+                title="Ad"
                 isSecureText={false}
-                handleonChangeText={setName}
-                handleValue={name}
-                handlePlaceholder="İsminiz"
+                handleonChangeText={setFirstName}
+                handleValue={firstName}
+                handlePlaceholder="Adınız"
+              />
+
+              <CustomTextInput
+                title="Soyad"
+                isSecureText={false}
+                handleonChangeText={setLastName}
+                handleValue={lastName}
+                handlePlaceholder="Soyadınız"
               />
 
               <CustomTextInput
@@ -38,14 +106,16 @@ const SignupPage = ({ navigation }) => {
                 handleonChangeText={setEmail}
                 handleValue={email}
                 handlePlaceholder="E-mail adresiniz"
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
 
               <CustomTextInput
-                title="Password"
+                title="Şifre"
                 isSecureText={true}
                 handleonChangeText={setPassword}
                 handleValue={password}
-                handlePlaceholder="Şifreniz"
+                handlePlaceholder="Şifreniz (min. 8 karakter)"
               />
             </View>
 
@@ -53,11 +123,10 @@ const SignupPage = ({ navigation }) => {
               <CustomButton
                 buttonText="KAYIT OL"
                 setWidth="60%"
-                handleOnPress={() =>
-                  console.log(name, "", email, "", password)
-                }
+                handleOnPress={handleRegister}
                 buttonColor="#FFA040"
                 pressedButtonColor="#f89028ff"
+                disabled={isLoading}
               />
 
               <Pressable onPress={() => navigation.navigate("Login")}>
@@ -68,6 +137,10 @@ const SignupPage = ({ navigation }) => {
             </View>
           </View>
         </View>
+
+        {isLoading && (
+          <Loading changeIsLoading={() => setIsLoading(false)} />
+        )}
       </SafeAreaView>
     </Layout>
   );

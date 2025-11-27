@@ -4,7 +4,18 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
-require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+
+// Load .env file only if it exists (for local development)
+// Docker Compose environment variables take precedence (override: false)
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath, override: false });
+} else {
+  // If .env doesn't exist, dotenv will use process.env (from Docker Compose)
+  require('dotenv').config({ override: false });
+}
 
 // Set default environment variables if not provided
 process.env.PORT = process.env.PORT || 3000;
@@ -17,6 +28,8 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'gym_app_jwt_secret_key_2024_
 process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 const authRoutes = require('./presentation/routes/authRoutes');
+const foodRoutes = require('./presentation/routes/foodRoutes');
+const aiRoutes = require('./presentation/routes/aiRoutes');
 const { errorHandler } = require('./presentation/middleware/errorHandler');
 const dbConnection = require('./infrastructure/database/connection');
 
@@ -39,6 +52,21 @@ const swaggerOptions = {
         description: 'Production server',
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT token girin. Önce /api/auth/login endpoint\'inden token alın.'
+        }
+      }
+    },
+    security: [
+      {
+        bearerAuth: []
+      }
+    ]
   },
   apis: ['./src/presentation/routes/*.js', './src/presentation/controllers/*.js'], // Path to the API files
 };
@@ -54,12 +82,18 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:8081',  // Metro bundler debug
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8081',
     'http://10.0.2.2:8081',   // Android emulator
     'http://10.0.2.2:3000',   // Android emulator API access
     'http://192.168.134.230:3000', // Gerçek cihaz test IP
-    'http://192.168.134.230:8081'  // Gerçek cihaz Metro bundler
+    'http://192.168.134.230:8081',  // Gerçek cihaz Metro bundler
+    /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // Tüm yerel ağ IP'leri için regex
+    /^http:\/\/10\.0\.2\.\d+:\d+$/ // Android emulator IP'leri için regex
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(morgan('combined'));
@@ -71,6 +105,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/foods', foodRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

@@ -6,334 +6,520 @@ import {
   Image,
   ScrollView,
   Pressable,
-  Modal,
-  TextInput
+  Alert,
+  TextInput,
 } from "react-native";
 import Layout from "../components/Layout";
 import { CustomButton } from "../components";
+import { useSelector, useDispatch } from "react-redux";
+import { setUserDetails, clearUser } from "../redux/userSlice";
+import apiService from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ProfilePage = () => {
-  const [modalType, setModalType] = useState(null); // "goal", "health", "personal"
+  const dispatch = useDispatch();
+  const { user, userDetails } = useSelector((state) => state.user);
+  
   const [illnesses, setIllnesses] = useState({
     belFitigi: false,
     dizSakatligi: false,
     yuksekTansiyon: false,
   });
-  const [goal, setGoal] = useState("Kilo Alma");
-  const [userData, setUserData] = useState({
-    name: "Efe Şahin",
-    email: "efe.sahin@example.com",
-    age: 22,
-    height: 178,
-    weight: 70,
-  });
-  const [weeks, setWeeks] = useState(0);
 
-  // ⏱ Uygulama yüklenme tarihine göre antrenman süresini hesapla
+  const [goal, setGoal] = useState("Kilo Alma"); // Varsayılan hedef
+  const [height, setHeight] = useState("");
+  const [weight, setWeight] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [userData, setUserData] = useState(null);
+
+  // Kullanıcı bilgilerini yükle
   useEffect(() => {
-    AsyncStorage.getItem("installDate").then((date) => {
-      if (!date) {
-        const today = new Date().toISOString();
-        AsyncStorage.setItem("installDate", today);
-        return setWeeks(0);
-      }
-      const start = new Date(date);
-      const now = new Date();
-      const diffWeeks = Math.floor((now - start) / (1000 * 60 * 60 * 24 * 7));
-      setWeeks(diffWeeks);
-    });
-  }, []);
+    loadUserData();
+    loadUserDetails();
+  }, [user, userDetails]);
 
-  // Sağlık durumu metni
-  const getHealthStatus = () => {
-    const list = [];
-    if (illnesses.belFitigi) list.push("Bel Fıtığı");
-    if (illnesses.dizSakatligi) list.push("Diz Sakatlığı");
-    if (illnesses.yuksekTansiyon) list.push("Yüksek Tansiyon");
-    return list.length ? list.join(", ") : "Yok";
+  const loadUserData = async () => {
+    try {
+      // Önce Redux'tan kontrol et
+      if (user) {
+        setUserData(user);
+        return;
+      }
+      
+      // Redux'ta yoksa AsyncStorage'dan yükle
+      const userString = await AsyncStorage.getItem('user');
+      if (userString) {
+        const parsedUser = JSON.parse(userString);
+        setUserData(parsedUser);
+      }
+    } catch (error) {
+      console.error('Kullanıcı bilgileri yüklenirken hata:', error);
+    }
   };
 
-  // Kişisel bilgi değişiklikleri
-  const updatePersonalInfo = (key, value) => {
-    setUserData((prev) => ({ ...prev, [key]: value }));
+  const loadUserDetails = async () => {
+    try {
+      // Önce Redux'tan kontrol et
+      if (userDetails) {
+        setHeight(userDetails.height?.toString() || "");
+        setWeight(userDetails.weight?.toString() || "");
+        setGoal(userDetails.goal || "Kilo Alma");
+        if (userDetails.injuries) {
+          const injuriesArray = Array.isArray(userDetails.injuries) 
+            ? userDetails.injuries 
+            : [];
+          setIllnesses({
+            belFitigi: injuriesArray.includes("Bel Fıtığı"),
+            dizSakatligi: injuriesArray.includes("Diz Sakatlığı"),
+            yuksekTansiyon: injuriesArray.includes("Yüksek Tansiyon"),
+          });
+        }
+        return;
+      }
+
+      // Backend'den user details çek
+      const response = await apiService.getUserDetails();
+      console.log('User details response:', response);
+      if (response.success && response.data) {
+        console.log('User details data:', response.data);
+        console.log('Goal from backend:', response.data.goal);
+        dispatch(setUserDetails(response.data));
+        setHeight(response.data.height?.toString() || "");
+        setWeight(response.data.weight?.toString() || "");
+        setGoal(response.data.goal || "Kilo Alma");
+        console.log('Goal set to:', response.data.goal || "Kilo Alma");
+        if (response.data.injuries) {
+          const injuriesArray = Array.isArray(response.data.injuries) 
+            ? response.data.injuries 
+            : [];
+          setIllnesses({
+            belFitigi: injuriesArray.includes("Bel Fıtığı"),
+            dizSakatligi: injuriesArray.includes("Diz Sakatlığı"),
+            yuksekTansiyon: injuriesArray.includes("Yüksek Tansiyon"),
+          });
+        }
+      }
+    } catch (error) {
+      console.error('User details yüklenirken hata:', error);
+      // İlk kez açılıyorsa hata normal, detaylar henüz kaydedilmemiş olabilir
+    }
+  };
+
+  const getUserFullName = () => {
+    if (userData) {
+      if (userData.firstName && userData.lastName) {
+        return `${userData.firstName} ${userData.lastName}`;
+      }
+      return userData.email?.split('@')[0] || "Kullanıcı";
+    }
+    return "Kullanıcı";
+  };
+
+  const getUserEmail = () => {
+    return userData?.email || "";
+  };
+
+  const toggleIllness = (key) => {
+    setIllnesses((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const getHealthStatus = () => {
+    const { belFitigi, dizSakatligi, yuksekTansiyon } = illnesses;
+    let list = [];
+    if (belFitigi) list.push("Bel Fıtığı");
+    if (dizSakatligi) list.push("Diz Sakatlığı");
+    if (yuksekTansiyon) list.push("Yüksek Tansiyon");
+    return list.length > 0 ? list.join(", ") : "Yok";
+  };
+
+  const getTrainingDays = () => {
+    // Kullanıcının kayıt tarihini al
+    const registrationDate = userData?.createdAt || user?.createdAt;
+    
+    if (!registrationDate) {
+      return 1; // Tarih yoksa varsayılan olarak 1 gün göster
+    }
+
+    // Tarih string'ini Date objesine çevir
+    const registration = new Date(registrationDate);
+    const today = new Date();
+    
+    // Bugünün başlangıcını al (saat, dakika, saniye sıfırla)
+    today.setHours(0, 0, 0, 0);
+    registration.setHours(0, 0, 0, 0);
+    
+    // Gün farkını hesapla
+    const diffTime = today - registration;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    // En az 1 gün göster (bugün kayıt olanlar için de 1 gün)
+    return Math.max(1, diffDays);
+  };
+
+  const getInjuriesArray = () => {
+    const { belFitigi, dizSakatligi, yuksekTansiyon } = illnesses;
+    let list = [];
+    if (belFitigi) list.push("Bel Fıtığı");
+    if (dizSakatligi) list.push("Diz Sakatlığı");
+    if (yuksekTansiyon) list.push("Yüksek Tansiyon");
+    return list;
+  };
+
+  const handleSaveProfile = async () => {
+    console.log('=== HANDLE SAVE PROFILE ===');
+    console.log('Current goal state:', goal);
+    console.log('Goal type:', typeof goal);
+    console.log('Goal value:', goal);
+    console.log('Is goal empty?', !goal);
+    
+    if (!height || !weight) {
+      Alert.alert("Hata", "Lütfen boy ve kilo bilgilerini girin");
+      return;
+    }
+
+    if (!goal || goal.trim() === '') {
+      Alert.alert("Hata", "Lütfen bir fitness hedefi seçin");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const detailsData = {
+        height: parseInt(height),
+        weight: parseFloat(weight),
+        injuries: getInjuriesArray(),
+        goal: goal.trim(), // Fitness hedefini ekle ve trim et
+      };
+
+      console.log('Saving profile with data:', JSON.stringify(detailsData, null, 2));
+      console.log('Goal in detailsData:', detailsData.goal);
+      const response = await apiService.updateUserDetails(detailsData);
+      console.log('Update response:', response);
+      
+      if (response.success) {
+        console.log('Response data:', response.data);
+        console.log('Goal in response:', response.data?.goal);
+        dispatch(setUserDetails(response.data));
+        Alert.alert("Başarılı", "Profil bilgileriniz kaydedildi");
+      } else {
+        Alert.alert("Hata", response.message || "Profil kaydedilirken bir hata oluştu");
+      }
+    } catch (error) {
+      console.error("Profil kaydetme hatası:", error);
+      Alert.alert("Hata", error.message || "Profil kaydedilirken bir hata oluştu");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Çıkış Yap",
+      "Çıkış yapmak istediğinize emin misiniz?",
+      [
+        {
+          text: "İptal",
+          style: "cancel"
+        },
+        {
+          text: "Çıkış Yap",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // AsyncStorage'dan token ve user bilgilerini temizle
+              await apiService.logout();
+              
+              // Redux state'ini temizle
+              dispatch(clearUser());
+              
+              console.log("Çıkış yapıldı");
+            } catch (error) {
+              console.error("Çıkış yapma hatası:", error);
+              // Hata olsa bile Redux state'ini temizle
+              dispatch(clearUser());
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
     <Layout>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.card}>
+        <View style={styles.container}>
           <Image
             style={styles.profileImage}
             source={require("../../assets/images/profiletabicon.png")}
           />
-          <Text style={styles.name}>{userData.name}</Text>
-          <Text style={styles.email}>{userData.email}</Text>
+          <Text style={styles.name}>{getUserFullName()}</Text>
+          <Text style={styles.email}>{getUserEmail()}</Text>
 
           {/* Kişisel Bilgiler */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
-            {["Yaş", "Boy", "Kilo"].map((item, i) => (
-              <View key={i} style={styles.infoRow}>
-                <Text style={styles.label}>{item}</Text>
-                <Text style={styles.value}>
-                  {item === "Yaş" && userData.age}
-                  {item === "Boy" && userData.height + " cm"}
-                  {item === "Kilo" && userData.weight + " kg"}
-                </Text>
-              </View>
-            ))}
-            <Pressable
-              style={styles.smallButton}
-              onPress={() => setModalType("personal")}
-            >
-              <Text style={styles.buttonText}>Düzenle</Text>
-            </Pressable>
+          <View style={styles.infoBox}>
+            <Text style={styles.infoTitle}>Kişisel Bilgiler</Text>
+
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Boy (cm):</Text>
+              <TextInput
+                style={styles.input}
+                value={height}
+                onChangeText={setHeight}
+                placeholder="Boy"
+                placeholderTextColor="#999"
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Kilo (kg):</Text>
+              <TextInput
+                style={styles.input}
+                value={weight}
+                onChangeText={setWeight}
+                placeholder="Kilo"
+                placeholderTextColor="#999"
+                keyboardType="numeric"
+              />
+            </View>
           </View>
 
           {/* Fitness Hedefi */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Fitness Hedefi</Text>
-            <Text style={styles.subText}>
-              {goal} seçildi
+          <View style={styles.goalBox}>
+            <Text style={styles.infoTitle}>Fitness Hedefi</Text>
+            {["Kilo Alma", "Kilo Verme", "Kilo Koruma"].map((item) => (
+              <Pressable
+                key={item}
+                style={[
+                  styles.option,
+                  goal === item && styles.optionSelected,
+                ]}
+                onPress={() => {
+                  console.log('Goal seçildi:', item);
+                  setGoal(item);
+                  console.log('Goal state güncellendi:', item);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    goal === item && styles.optionTextSelected,
+                  ]}
+                >
+                  {item}
+                </Text>
+              </Pressable>
+            ))}
+
+            <Text style={styles.selectedText}>
+              Seçilen hedef: <Text style={styles.selectedValue}>{goal}</Text>
             </Text>
-            <Pressable
-              style={styles.smallButton}
-              onPress={() => setModalType("goal")}
-            >
-              <Text style={styles.buttonText}>Hedef Seç</Text>
-            </Pressable>
           </View>
 
-          {/* Sağlık Durumu */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sağlık Durumu</Text>
-            <Text style={styles.subText}>Durum: {getHealthStatus()}</Text>
-            <Pressable
-              style={styles.smallButton}
-              onPress={() => setModalType("health")}
-            >
-              <Text style={styles.buttonText}>Sağlığı Ayarla</Text>
-            </Pressable>
+          {/* Hastalık Durumu */}
+          <View style={styles.illnessBox}>
+            <Text style={styles.infoTitle}>Sağlık Durumu</Text>
+
+            {[
+              { key: "belFitigi", label: "Bel Fıtığı" },
+              { key: "dizSakatligi", label: "Diz Sakatlığı" },
+              { key: "yuksekTansiyon", label: "Yüksek Tansiyon" },
+            ].map((item) => (
+              <Pressable
+                key={item.key}
+                style={[
+                  styles.option,
+                  illnesses[item.key] && styles.optionSelected,
+                ]}
+                onPress={() => toggleIllness(item.key)}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    illnesses[item.key] && styles.optionTextSelected,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            ))}
+
+            <Text style={styles.selectedText}>
+              Hastalık:{" "}
+              <Text style={styles.selectedValue}>{getHealthStatus()}</Text>
+            </Text>
           </View>
 
           {/* Antrenman Süresi */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Antrenman Süresi</Text>
-            <Text style={styles.trainingText}>
-              {weeks} haftadır aktif 💪
+          <View style={styles.trainingBox}>
+            <Text style={styles.infoTitle}>Antrenman Süresi</Text>
+            <Text style={styles.trainingWeeks}>
+              {getTrainingDays()} gündür gym app ile antrenman yapıyorsunuz 💪
             </Text>
           </View>
 
+          {/* Kaydet Butonu */}
           <CustomButton
             buttonText="Profili Kaydet"
             setWidth="80%"
-            handleOnPress={() => console.log({ goal, illnesses, weeks })}
-            buttonColor="#D6B982"
-            pressedButtonColor="#c89b65"
-            textColor="#000"
+            handleOnPress={handleSaveProfile}
+            buttonColor="#FFA040"
+            pressedButtonColor="#f89028ff"
+            disabled={isLoading}
+          />
+
+          {/* Çıkış Yap Butonu */}
+          <CustomButton
+            buttonText="Çıkış Yap"
+            setWidth="80%"
+            handleOnPress={handleLogout}
+            buttonColor="#ff4444"
+            pressedButtonColor="#cc0000"
+            disabled={isLoading}
           />
         </View>
       </ScrollView>
-
-      {/* Modal */}
-      <Modal visible={!!modalType} transparent animationType="slide">
-        <View style={styles.modalBackground}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>
-              {modalType === "goal"
-                ? "Fitness Hedefi Seç"
-                : modalType === "health"
-                ? "Sağlık Durumunu Ayarla"
-                : "Kişisel Bilgileri Düzenle"}
-            </Text>
-
-            {/* Hedef Seçme */}
-            {modalType === "goal" &&
-              ["Kilo Alma", "Kilo Verme", "Kilo Koruma"].map((item) => (
-                <Pressable
-                  key={item}
-                  style={[styles.option, goal === item && styles.optionSelected]}
-                  onPress={() => {
-                    setGoal(item);
-                    setModalType(null);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      goal === item && styles.optionTextSelected,
-                    ]}
-                  >
-                    {item}
-                  </Text>
-                </Pressable>
-              ))}
-
-            {/* Sağlık Durumu */}
-            {modalType === "health" &&
-              Object.entries(illnesses).map(([key, value]) => (
-                <Pressable
-                  key={key}
-                  style={[styles.option, value && styles.optionSelected]}
-                  onPress={() => setIllnesses((prev) => ({ ...prev, [key]: !prev[key] }))}
-                >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      value && styles.optionTextSelected,
-                    ]}
-                  >
-                    {key === "belFitigi" && "Bel Fıtığı"}
-                    {key === "dizSakatligi" && "Diz Sakatlığı"}
-                    {key === "yuksekTansiyon" && "Yüksek Tansiyon"}
-                  </Text>
-                </Pressable>
-              ))}
-
-            {/* Kişisel Bilgi Düzenleme */}
-            {modalType === "personal" &&
-              ["Yaş", "Boy", "Kilo"].map((key) => (
-                <TextInput
-                  key={key}
-                  style={styles.input}
-                  keyboardType="numeric"
-                  placeholder={key + ""}
-                  placeholderTextColor="#aaa"
-                  onChangeText={(text) => updatePersonalInfo(key, text)}
-                />
-              ))}
-
-            <Pressable
-              style={[styles.smallButton, { marginTop: 15 }]}
-              onPress={() => setModalType(null)}
-            >
-              <Text style={styles.buttonText}>Kapat</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </Layout>
   );
 };
 
 export default ProfilePage;
 
-
 const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
+    justifyContent: "center",
     alignItems: "center",
     paddingVertical: 30,
   },
-  card: {
-    backgroundColor: "rgba(15,15,15,0.9)",
-    width: "88%",
-    borderRadius: 22,
-    padding: 20,
+  container: {
     alignItems: "center",
-    shadowColor: "#D6B982",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 15,
-    elevation: 12,
+    backgroundColor: "rgba(26, 26, 26, 0.85)",
+    width: "85%",
+    borderRadius: 16,
+    paddingVertical: 25,
+    paddingHorizontal: 20,
+    shadowColor: "#FF8C00",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 20,
+    elevation: 10,
   },
   profileImage: {
-    width: 115,
-    height: 115,
-    borderRadius: 60,
-    borderWidth: 2.2,
-    borderColor: "#D6B982",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 2,
+    borderColor: "#FFA040",
     marginBottom: 15,
   },
   name: {
     color: "white",
-    fontSize: 23,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 5,
   },
   email: {
-    color: "#999",
+    color: "gray",
     fontSize: 14,
-    marginBottom: 25,
+    marginBottom: 20,
   },
-  section: {
+  infoBox: {
     width: "100%",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 12,
     padding: 15,
     marginBottom: 20,
   },
-  sectionTitle: {
+  infoTitle: {
+    color: "#FFA040",
+    fontWeight: "bold",
     fontSize: 18,
-    fontWeight: "600",
-    color: "#D6B982",
+    marginBottom: 10,
     textAlign: "center",
-    marginBottom: 12,
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginVertical: 3,
+    marginVertical: 5,
   },
-  label: { color: "#ccc", fontSize: 15 },
-  value: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  label: {
+    color: "#ccc",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  value: {
+    color: "white",
+    fontSize: 15,
+  },
+  goalBox: {
+    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  illnessBox: {
+    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  trainingBox: {
+    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 25,
+    alignItems: "center",
+  },
   option: {
+    width: "90%",
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 10,
     paddingVertical: 10,
-    paddingHorizontal: 15,  
     marginVertical: 6,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#555",
-    transition: "0.2s",
+    borderColor: "gray",
   },
   optionSelected: {
-    backgroundColor: "#D6B982",
-    borderColor: "#c89b65",
+    backgroundColor: "#FFA040",
+    borderColor: "#f89028",
   },
-  optionText: { color: "white", fontSize: 16 },
-  optionTextSelected: { color: "black", fontWeight: "700" },
-  subText: { color: "#aaa", marginTop: 12, fontSize: 14, textAlign: "center" },
-  highlight: { color: "#D6B982", fontWeight: "bold" },
-  trainingText: { color: "white", fontSize: 16, textAlign: "center" },
-
-  smallButton: {
-  backgroundColor: "#D6B982",
-  paddingVertical: 8,
-  paddingHorizontal: 16,
-  borderRadius: 8,
-  marginTop: 10,
-  alignItems: "center",
-},
-
-buttonText: { color: "black", fontSize: 15, fontWeight: "600" ,  },
-modalBackground: {
-  flex: 1,
-  justifyContent: "center",
-  alignItems: "center",
-  backgroundColor: "rgba(0,0,0,0.7)",
-},
-modalContainer: {
-  width: "85%",
-  backgroundColor: "#222",
-  padding: 20,
-  borderRadius: 16,
-  alignItems: "center",
-},
-modalTitle: {
-  fontSize: 18,
-  color: "#D6B982",
-  fontWeight: "700",
-  marginBottom: 15,
-},
-input: {
-  width: "100%",
-  backgroundColor: "#333",
-  borderRadius: 10,
-  padding: 10,
-  color: "white",
-  marginTop: 6,
-},
-
+  optionText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  optionTextSelected: {
+    color: "black",
+    fontWeight: "bold",
+  },
+  selectedText: {
+    color: "#ccc",
+    marginTop: 15,
+    fontSize: 14,
+  },
+  selectedValue: {
+    color: "#FFA040",
+    fontWeight: "bold",
+  },
+  trainingWeeks: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  input: {
+    color: "white",
+    fontSize: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#FFA040",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    minWidth: 80,
+    textAlign: "right",
+  },
 });

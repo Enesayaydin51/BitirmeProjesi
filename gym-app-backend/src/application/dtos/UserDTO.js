@@ -106,6 +106,7 @@ class UserDetailsDTO {
     this.height = data.height;
     this.weight = data.weight;
     this.injuries = data.injuries || [];
+    this.goal = data.goal; // Fitness hedefi: Kilo Alma, Kilo Verme, Kilo Koruma
   }
 
   validate() {
@@ -125,6 +126,11 @@ class UserDetailsDTO {
 
     if (!Array.isArray(this.injuries)) {
       errors.push('Injuries must be an array');
+    }
+
+    const validGoals = ['Kilo Alma', 'Kilo Verme', 'Kilo Koruma'];
+    if (this.goal && !validGoals.includes(this.goal)) {
+      errors.push('Goal must be one of: Kilo Alma, Kilo Verme, Kilo Koruma');
     }
 
     return errors;

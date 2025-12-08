@@ -4,8 +4,18 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
+const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
+
+// Load .env file only if it exists (for local development)
+// Docker Compose environment variables take precedence (override: false)
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  require('dotenv').config({ path: envPath, override: false });
+} else {
+  // If .env doesn't exist, dotenv will use process.env (from Docker Compose)
+  require('dotenv').config({ override: false });
+}
 
 // Set default environment variables if not provided
 process.env.PORT = process.env.PORT || 3000;
@@ -18,10 +28,13 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'gym_app_jwt_secret_key_2024_
 process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 const authRoutes = require('./presentation/routes/authRoutes');
+const foodRoutes = require('./presentation/routes/foodRoutes');
+const aiRoutes = require('./presentation/routes/aiRoutes');
 const { errorHandler } = require('./presentation/middleware/errorHandler');
 const dbConnection = require('./infrastructure/database/connection');
+const trainingProgramRoutes = require('./presentation/routes/trainingProgramRoutes');
 
-// Swagger configuration (FIXED)
+// Swagger configuration
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -31,25 +44,56 @@ const swaggerOptions = {
       description: 'Gym App Backend API Documentation',
     },
     servers: [
-      { url: 'http://localhost:3000', description: 'Development server' },
-      { url: 'http://10.152.173.189:3000', description: 'Production server' },
+      {
+        url: 'http://localhost:3000',
+        description: 'Development server',
+      },
+      {
+        url: 'http://10.152.173.189:3000',
+        description: 'Production server',
+      },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT token girin. Önce /api/auth/login endpoint\'inden token alın.'
+        }
+      }
+    },
+    security: [
+      {
+        bearerAuth: []
+      }
+    ]
   },
-  // 🔧 Path fix — uses __dirname to always find correct route files
-  apis: [
-    path.join(__dirname, './presentation/routes/*.js'),
-    path.join(__dirname, './presentation/controllers/*.js'),
-  ],
+  apis: ['./src/presentation/routes/*.js', './src/presentation/controllers/*.js'], // Path to the API files
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+// app.use(helmet()); // Geçici olarak devre dışı
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:8081',  // Metro bundler debug
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8081',
+    'http://10.0.2.2:8081',   // Android emulator
+    'http://10.0.2.2:3000',   // Android emulator API access
+    'http://192.168.134.230:3000', // Gerçek cihaz test IP
+    'http://192.168.134.230:8081',  // Gerçek cihaz Metro bundler
+    /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // Tüm yerel ağ IP'leri için regex
+    /^http:\/\/10\.0\.2\.\d+:\d+$/ // Android emulator IP'leri için regex
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -62,11 +106,15 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/foods', foodRoutes);
+app.use('/api/ai', aiRoutes);
+app.use("/api/program", trainingProgramRoutes);
+
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
+  res.status(200).json({ 
+    status: 'OK', 
     message: 'Gym App Backend is running',
     timestamp: new Date().toISOString()
   });
@@ -97,7 +145,7 @@ app.use(errorHandler);
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({
+  res.status(404).json({ 
     error: 'Route not found',
     message: `Cannot ${req.method} ${req.originalUrl}`
   });
@@ -106,10 +154,12 @@ app.use((req, res) => {
 // Start server
 const startServer = async () => {
   try {
+    // Initialize database connection
     console.log('🔌 Connecting to database...');
     await dbConnection.connect();
     console.log('✅ Database connected successfully');
-
+    
+    // Start server
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📱 Health check: http://localhost:${PORT}/health`);

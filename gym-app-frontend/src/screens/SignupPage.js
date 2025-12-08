@@ -18,48 +18,56 @@ const SignupPage = ({ navigation }) => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
 
-  const handleRegister = async () => {
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password.trim()) {
-      Alert.alert("Eksik Bilgi", "Lütfen zorunlu alanları doldurun.");
-      return;
-    }
+const handleRegister = async () => {
+  if (!firstName.trim() || !lastName.trim() || !email.trim() || !password.trim()) {
+    Alert.alert("Eksik Bilgi", "Lütfen zorunlu alanları doldurun.");
+    return;
+  }
 
-    const userData = {
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      email: email.trim(),
-      password: password.trim(),
-      phoneNumber: phoneNumber.trim() || null,
-      dateOfBirth: dateOfBirth.trim() || null,
-    };
+  // Backend'in beklediği alan adları ve formatlar
+  const userData = {
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
+    email: email.trim(),
+    password: password.trim(),
 
-    try {
-      const registerResponse = await ApiService.register(userData);
+    // --- PHONE FORMAT FIX ---
+    phone: phoneNumber ? phoneNumber.replace(/\s+/g, "") : null,
 
-      if (registerResponse.success) {
-        Alert.alert("Kayıt Başarılı", "Hesabınız oluşturuldu, giriş yapılıyor...");
-
-        const loginResponse = await ApiService.login({
-          email: userData.email,
-          password: userData.password,
-        });
-
-        if (loginResponse.success) {
-          dispatch(setAuth(true));
-          dispatch(setUser(loginResponse.data.user));
-          dispatch(setToken(loginResponse.data.token));
-
-          Alert.alert("Giriş Başarılı", `Hoş geldiniz, ${loginResponse.data.user.firstName}!`);
-        } else {
-          Alert.alert("Giriş Hatası", loginResponse.message || "Giriş başarısız oldu.");
-        }
-      } else {
-        Alert.alert("Kayıt Hatası", registerResponse.message || "Kayıt sırasında hata oluştu.");
-      }
-    } catch (error) {
-      Alert.alert("Sunucu Hatası", error.message || "Sunucuya bağlanılamadı.");
-    }
+    // --- DATE FORMAT FIX (DD/MM/YYYY → YYYY-MM-DD) ---
+    dateOfBirth: dateOfBirth
+      ? dateOfBirth.split(/[-/.]/).reverse().join("-")
+      : null,
   };
+
+  try {
+    const registerResponse = await ApiService.register(userData);
+
+    if (registerResponse.success) {
+      Alert.alert("Kayıt Başarılı", "Hesabınız oluşturuldu, giriş yapılıyor...");
+
+      const loginResponse = await ApiService.login({
+        email: userData.email,
+        password: userData.password,
+      });
+
+      if (loginResponse.success) {
+        dispatch(setAuth(true));
+        dispatch(setUser(loginResponse.data.user));
+        dispatch(setToken(loginResponse.data.token));
+
+        Alert.alert("Giriş Başarılı", `Hoş geldiniz, ${loginResponse.data.user.firstName}!`);
+      } else {
+        Alert.alert("Giriş Hatası", loginResponse.message || "Giriş başarısız oldu.");
+      }
+    } else {
+      Alert.alert("Kayıt Hatası", registerResponse.message || "Kayıt sırasında hata oluştu.");
+    }
+  } catch (error) {
+    Alert.alert("Sunucu Hatası", error.message || "Sunucuya bağlanılamadı.");
+  }
+};
+
 
   return (
     <Layout>

@@ -1,69 +1,17 @@
 const express = require('express');
+const AuthController = require('../controllers/AuthController');
+const { authMiddleware } = require('../middleware/authMiddleware');
+
 const router = express.Router();
-const authController = require('../controllers/AuthController');
+const authController = new AuthController();
 
-/**
- * @swagger
- * tags:
- *   name: Auth
- *   description: Kullanıcı kimlik doğrulama işlemleri
- */
+// Public routes
+router.post('/register', authController.register.bind(authController));
+router.post('/login', authController.login.bind(authController));
 
-/**
- * @swagger
- * /api/auth/register:
- *   post:
- *     summary: Yeni kullanıcı kaydı oluşturur
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 example: Efe Şahin
- *               email:
- *                 type: string
- *                 example: efe@example.com
- *               password:
- *                 type: string
- *                 example: 123456
- *     responses:
- *       201:
- *         description: Kullanıcı başarıyla kaydedildi
- *       400:
- *         description: Eksik veya hatalı bilgi
- */
-router.post('/register', authController.register);
-
-/**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Kullanıcı girişi yapar
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 example: efe@example.com
- *               password:
- *                 type: string
- *                 example: 123456
- *     responses:
- *       200:
- *         description: Giriş başarılı
- *       401:
- *         description: Yetkisiz giriş
- */
-router.post('/login', authController.login);
+// Protected routes
+router.get('/profile', authMiddleware, authController.getProfile.bind(authController));
+router.get('/user-details', authMiddleware, authController.getUserDetails.bind(authController));
+router.put('/user-details', authMiddleware, authController.updateUserDetails.bind(authController));
 
 module.exports = router;

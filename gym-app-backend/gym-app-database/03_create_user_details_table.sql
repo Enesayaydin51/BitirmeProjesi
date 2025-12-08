@@ -3,10 +3,12 @@
 
 CREATE TABLE IF NOT EXISTS user_details (
     id SERIAL PRIMARY KEY,
+    age INTEGER,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     height INTEGER, -- Boy (cm)
     weight DECIMAL(5,2), -- Kilo (kg)
     injuries TEXT[], -- Rahatsızlıklar array olarak
+    goal VARCHAR(50); 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id) -- Her kullanıcı için sadece bir kayıt
